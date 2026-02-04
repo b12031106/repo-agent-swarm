@@ -84,6 +84,13 @@ export async function POST(request: NextRequest) {
     })
     .run();
 
+  // Read orchestrator custom prompt from settings
+  const orchestratorPromptSetting = db
+    .select()
+    .from(schema.settings)
+    .where(eq(schema.settings.key, "orchestrator_custom_prompt"))
+    .get();
+
   // Create orchestrator agent
   const orchestrator = new OrchestratorAgent({
     repos: readyRepos.map((r) => ({
@@ -91,6 +98,7 @@ export async function POST(request: NextRequest) {
       repoName: r.name,
       repoPath: r.localPath,
     })),
+    customPrompt: orchestratorPromptSetting?.value || null,
   });
 
   if (sessionId) {

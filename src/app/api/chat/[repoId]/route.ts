@@ -99,6 +99,7 @@ export async function POST(
     repoId,
     repoName: repo.name,
     repoPath: repo.localPath,
+    customPrompt: repo.customPrompt,
   });
 
   // Shared state for cancel callback

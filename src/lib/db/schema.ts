@@ -15,6 +15,15 @@ export const repos = sqliteTable("repos", {
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
   lastSyncedAt: text("last_synced_at"),
+  customPrompt: text("custom_prompt"),
+});
+
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
 });
 
 export const conversations = sqliteTable("conversations", {

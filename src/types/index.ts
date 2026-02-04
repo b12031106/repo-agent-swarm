@@ -9,6 +9,7 @@ export interface Repo {
   errorMessage: string | null;
   createdAt: string;
   lastSyncedAt: string | null;
+  customPrompt: string | null;
 }
 
 export interface Conversation {
@@ -60,6 +61,13 @@ export interface SSEEvent {
 export interface CreateRepoRequest {
   githubUrl: string;
   name?: string;
+  customPrompt?: string;
+}
+
+export interface Setting {
+  key: string;
+  value: string;
+  updatedAt: string;
 }
 
 export interface ChatRequest {

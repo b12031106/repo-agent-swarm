@@ -14,6 +14,7 @@ export interface OrchestratorConfig {
   model?: string;
   maxBudgetUsd?: number;
   provider?: AgentProvider;
+  customPrompt?: string | null;
 }
 
 /**
@@ -56,7 +57,10 @@ export class OrchestratorAgent {
       .map((r) => `- **${r.repoName}**: ${r.repoPath}`)
       .join("\n");
 
-    const systemPrompt = getOrchestratorSystemPrompt(repoDescriptions);
+    const systemPrompt = getOrchestratorSystemPrompt(
+      repoDescriptions,
+      this.config.customPrompt
+    );
 
     const agentsObj: Record<string, { description: string; prompt: string }> =
       {};

@@ -10,6 +10,7 @@ export interface RepoAgentConfig {
   model?: string;
   maxBudgetUsd?: number;
   provider?: AgentProvider;
+  customPrompt?: string | null;
 }
 
 /**
@@ -54,7 +55,8 @@ export class RepoAgent {
   ): AsyncGenerator<AgentStreamEvent> {
     const systemPrompt = getRepoAgentSystemPrompt(
       this.config.repoName,
-      this.config.repoPath
+      this.config.repoPath,
+      this.config.customPrompt
     );
 
     let hasContent = false;

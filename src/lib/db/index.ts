@@ -49,6 +49,22 @@ function createDb() {
     // Column already exists
   }
 
+  // Migration: add custom_prompt column to repos
+  try {
+    db.run(sql`ALTER TABLE repos ADD COLUMN custom_prompt TEXT`);
+  } catch {
+    // Column already exists
+  }
+
+  // Create settings table
+  db.run(sql`
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
   db.run(sql`
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,

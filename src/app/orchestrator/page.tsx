@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ChatContainer } from "@/components/chat/chat-container";
 import { ConversationList } from "@/components/chat/conversation-list";
 import type { Conversation } from "@/types";
-import { Loader2, Plus, History } from "lucide-react";
+import { Loader2, Plus, History, Settings } from "lucide-react";
+import { OrchestratorSettingsDialog } from "@/components/orchestrator/orchestrator-settings-dialog";
 
 function OrchestratorContent() {
   const router = useRouter();
@@ -15,6 +16,7 @@ function OrchestratorContent() {
     searchParams.get("conv") || undefined
   );
   const [showHistory, setShowHistory] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -94,6 +96,13 @@ function OrchestratorContent() {
           <Plus className="h-3.5 w-3.5" />
           新對話
         </button>
+        <button
+          onClick={() => setShowSettings(true)}
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+        >
+          <Settings className="h-3.5 w-3.5" />
+          設定
+        </button>
         {conversations.length > 0 && (
           <button
             onClick={() => setShowHistory(!showHistory)}
@@ -121,6 +130,11 @@ function OrchestratorContent() {
           onConversationId={handleConversationId}
         />
       </div>
+
+      <OrchestratorSettingsDialog
+        open={showSettings}
+        onOpenChange={setShowSettings}
+      />
     </div>
   );
 }

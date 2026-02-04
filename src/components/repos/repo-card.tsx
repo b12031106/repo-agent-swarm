@@ -10,6 +10,7 @@ import {
   Loader2,
   AlertCircle,
   Check,
+  Settings,
 } from "lucide-react";
 import type { Repo } from "@/types";
 import Link from "next/link";
@@ -18,6 +19,7 @@ interface RepoCardProps {
   repo: Repo;
   onSync?: (repoId: string) => void;
   onDelete?: (repoId: string) => void;
+  onSettings?: (repoId: string) => void;
 }
 
 const statusConfig = {
@@ -47,7 +49,7 @@ const statusConfig = {
   },
 };
 
-export function RepoCard({ repo, onSync, onDelete }: RepoCardProps) {
+export function RepoCard({ repo, onSync, onDelete, onSettings }: RepoCardProps) {
   const status = statusConfig[repo.status];
   const StatusIcon = status.icon;
 
@@ -58,12 +60,19 @@ export function RepoCard({ repo, onSync, onDelete }: RepoCardProps) {
           <GitBranch className="h-5 w-5 text-muted-foreground" />
           <h3 className="font-semibold">{repo.name}</h3>
         </div>
-        <Badge variant={status.variant} className="flex items-center gap-1">
-          <StatusIcon
-            className={`h-3 w-3 ${status.animate ? "animate-spin" : ""}`}
-          />
-          {status.label}
-        </Badge>
+        <div className="flex items-center gap-1.5">
+          {repo.customPrompt && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+              自訂 Prompt
+            </Badge>
+          )}
+          <Badge variant={status.variant} className="flex items-center gap-1">
+            <StatusIcon
+              className={`h-3 w-3 ${status.animate ? "animate-spin" : ""}`}
+            />
+            {status.label}
+          </Badge>
+        </div>
       </div>
 
       <p className="mt-1 text-xs text-muted-foreground truncate">
@@ -96,6 +105,14 @@ export function RepoCard({ repo, onSync, onDelete }: RepoCardProps) {
             >
               <RefreshCw className="mr-1 h-3 w-3" />
               同步
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onSettings?.(repo.id)}
+            >
+              <Settings className="mr-1 h-3 w-3" />
+              設定
             </Button>
           </>
         )}

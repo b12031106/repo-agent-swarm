@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { RepoCard } from "./repo-card";
 import { AddRepoForm } from "./add-repo-form";
+import { RepoSettingsDialog } from "./repo-settings-dialog";
 import { Button } from "@/components/ui/button";
 import type { Repo } from "@/types";
 import { Loader2, RefreshCw } from "lucide-react";
@@ -15,6 +16,7 @@ export function RepoList() {
   const [repos, setRepos] = useState<Repo[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [settingsRepoId, setSettingsRepoId] = useState<string | null>(null);
 
   const fetchRepos = useCallback(async () => {
     try {
@@ -52,6 +54,18 @@ export function RepoList() {
     await fetch(`/api/repos/${repoId}`, { method: "DELETE" });
     fetchRepos().then(() => notifySidebar());
   };
+
+  const handleSettings = (repoId: string) => {
+    setSettingsRepoId(repoId);
+  };
+
+  const handleSettingsSaved = (updatedRepo: Repo) => {
+    setRepos((prev) =>
+      prev.map((r) => (r.id === updatedRepo.id ? updatedRepo : r))
+    );
+  };
+
+  const settingsRepo = repos.find((r) => r.id === settingsRepoId);
 
   return (
     <div className="space-y-6">
@@ -91,11 +105,23 @@ export function RepoList() {
                   repo={repo}
                   onSync={handleSync}
                   onDelete={handleDelete}
+                  onSettings={handleSettings}
                 />
               ))}
             </div>
           )}
         </>
+      )}
+
+      {settingsRepo && (
+        <RepoSettingsDialog
+          repo={settingsRepo}
+          open={!!settingsRepoId}
+          onOpenChange={(open) => {
+            if (!open) setSettingsRepoId(null);
+          }}
+          onSaved={handleSettingsSaved}
+        />
       )}
     </div>
   );
