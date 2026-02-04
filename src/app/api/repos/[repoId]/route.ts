@@ -1,0 +1,55 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getDb, schema } from "@/lib/db";
+import { eq } from "drizzle-orm";
+import { removeRepo } from "@/lib/git/clone";
+import { agentManager } from "@/lib/agents/agent-manager";
+
+/** GET /api/repos/[repoId] - Get a single repo */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ repoId: string }> }
+) {
+  const { repoId } = await params;
+  const db = getDb();
+  const repo = db
+    .select()
+    .from(schema.repos)
+    .where(eq(schema.repos.id, repoId))
+    .get();
+
+  if (!repo) {
+    return NextResponse.json({ error: "Repo not found" }, { status: 404 });
+  }
+
+  return NextResponse.json(repo);
+}
+
+/** DELETE /api/repos/[repoId] - Remove a repo */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ repoId: string }> }
+) {
+  const { repoId } = await params;
+  const db = getDb();
+
+  const repo = db
+    .select()
+    .from(schema.repos)
+    .where(eq(schema.repos.id, repoId))
+    .get();
+
+  if (!repo) {
+    return NextResponse.json({ error: "Repo not found" }, { status: 404 });
+  }
+
+  // Remove from disk
+  removeRepo(repo.localPath);
+
+  // Remove agent instance
+  agentManager.removeAgent(repoId);
+
+  // Delete from DB (cascades to conversations, messages, usage)
+  db.delete(schema.repos).where(eq(schema.repos.id, repoId)).run();
+
+  return NextResponse.json({ success: true });
+}
