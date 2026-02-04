@@ -35,6 +35,19 @@ export function RepoList() {
     fetchRepos();
   }, [fetchRepos]);
 
+  // Auto-poll while any repo is in a pending state (cloning/syncing)
+  const hasPendingRepos = repos.some(
+    (r) => r.status === "cloning" || r.status === "syncing"
+  );
+
+  useEffect(() => {
+    if (!hasPendingRepos) return;
+    const interval = setInterval(() => {
+      fetchRepos().then(() => notifySidebar());
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [hasPendingRepos, fetchRepos]);
+
   const handleRefresh = () => {
     setRefreshing(true);
     fetchRepos().then(() => notifySidebar());
