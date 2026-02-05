@@ -6,6 +6,8 @@ import { ChatContainer } from "@/components/chat/chat-container";
 import { ConversationList } from "@/components/chat/conversation-list";
 import type { Conversation } from "@/types";
 import { Loader2, Plus, History, Settings } from "lucide-react";
+import { DeleteConversationButton } from "@/components/chat/delete-conversation-button";
+import { useChatStore } from "@/stores/chat-store";
 import { OrchestratorSettingsDialog } from "@/components/orchestrator/orchestrator-settings-dialog";
 
 function OrchestratorContent() {
@@ -17,6 +19,9 @@ function OrchestratorContent() {
   );
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const isStreaming = useChatStore((s) =>
+    activeConvId ? (s.sessions.get(activeConvId)?.isLoading ?? false) : false
+  );
 
   useEffect(() => {
     const load = async () => {
@@ -89,6 +94,14 @@ function OrchestratorContent() {
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b px-4 py-3">
         <h2 className="font-semibold flex-1">總顧問 (Orchestrator)</h2>
+        {activeConvId && (
+          <DeleteConversationButton
+            conversationId={activeConvId}
+            chatId={activeConvId}
+            onDeleted={handleDeleteConversation}
+            disabled={isStreaming}
+          />
+        )}
         <button
           onClick={startNewConversation}
           className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"

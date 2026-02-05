@@ -97,6 +97,7 @@ export async function POST(request: NextRequest) {
       repoId: r.id,
       repoName: r.name,
       repoPath: r.localPath,
+      customPrompt: r.customPrompt,
     })),
     customPrompt: orchestratorPromptSetting?.value || null,
   });
@@ -107,12 +108,24 @@ export async function POST(request: NextRequest) {
 
   const finalConvId = convId;
 
+  // Track current phase to know when to accumulate text
+  let currentPhase: string | null = null;
+
   async function* streamWithPersistence(): AsyncGenerator<AgentStreamEvent> {
     let fullAssistantText = "";
     let resultSessionId: string | undefined;
+    let totalUsage = { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
 
     for await (const event of orchestrator.query(message, sessionId, effectiveModel)) {
-      if (event.type === "text" && event.content) {
+      // Track phase transitions
+      if (event.type === "phase_start") {
+        currentPhase = event.phase || null;
+      } else if (event.type === "phase_end") {
+        currentPhase = null;
+      }
+
+      // Only accumulate text from synthesis phase (the final response)
+      if (event.type === "text" && event.content && currentPhase === "synthesis") {
         fullAssistantText += event.content;
       }
 
@@ -120,21 +133,40 @@ export async function POST(request: NextRequest) {
         resultSessionId = event.sessionId;
       }
 
+      // Accumulate usage from all phases (done events from subagents too)
       if (event.type === "done" && event.usage) {
-        db.insert(schema.usageRecords)
-          .values({
-            id: uuidv4(),
-            conversationId: finalConvId,
-            inputTokens: event.usage.input_tokens,
-            outputTokens: event.usage.output_tokens,
-            totalCostUsd: event.usage.cost_usd,
-          })
-          .run();
+        totalUsage.input_tokens += event.usage.input_tokens;
+        totalUsage.output_tokens += event.usage.output_tokens;
+        totalUsage.cost_usd += event.usage.cost_usd;
+      }
+
+      // Also accumulate usage from subagent inner events
+      if (
+        event.type === "subagent_event" &&
+        event.innerEvent?.type === "done" &&
+        event.innerEvent.usage
+      ) {
+        totalUsage.input_tokens += event.innerEvent.usage.input_tokens;
+        totalUsage.output_tokens += event.innerEvent.usage.output_tokens;
+        totalUsage.cost_usd += event.innerEvent.usage.cost_usd;
       }
 
       yield { ...event, conversationId: finalConvId } as AgentStreamEvent & {
         conversationId: string;
       };
+    }
+
+    // Save aggregated usage
+    if (totalUsage.input_tokens > 0 || totalUsage.output_tokens > 0) {
+      db.insert(schema.usageRecords)
+        .values({
+          id: uuidv4(),
+          conversationId: finalConvId,
+          inputTokens: totalUsage.input_tokens,
+          outputTokens: totalUsage.output_tokens,
+          totalCostUsd: totalUsage.cost_usd,
+        })
+        .run();
     }
 
     if (fullAssistantText) {
@@ -161,6 +193,8 @@ export async function POST(request: NextRequest) {
 
   const stream = createSSEStream(streamWithPersistence(), {
     onCancel: (accumulatedText) => {
+      // accumulatedText from SSE encoder includes ALL text events (planning + synthesis)
+      // We only want synthesis text, but on cancel we save whatever we have
       if (accumulatedText) {
         db.insert(schema.messages)
           .values({

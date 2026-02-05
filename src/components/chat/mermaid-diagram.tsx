@@ -2,18 +2,29 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
+import { Loader2, Maximize2 } from "lucide-react";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { MermaidZoomModal } from "./mermaid-zoom-modal";
 
 interface MermaidDiagramProps {
   chart: string;
+  isStreaming?: boolean;
 }
 
-export function MermaidDiagram({ chart }: MermaidDiagramProps) {
+export function MermaidDiagram({ chart, isStreaming }: MermaidDiagramProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [svgHtml, setSvgHtml] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const { resolvedTheme } = useTheme();
 
   useEffect(() => {
+    // Skip rendering while streaming - chart content is likely incomplete
+    if (isStreaming) return;
+
     let cancelled = false;
+    const renderId = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     async function renderChart() {
       if (!containerRef.current) return;
@@ -24,6 +35,7 @@ export function MermaidDiagram({ chart }: MermaidDiagramProps) {
           startOnLoad: false,
           theme: resolvedTheme === "dark" ? "dark" : "default",
           securityLevel: "loose",
+          suppressErrorRendering: true,
           themeVariables:
             resolvedTheme === "dark"
               ? {
@@ -50,14 +62,17 @@ export function MermaidDiagram({ chart }: MermaidDiagramProps) {
                 },
         });
 
-        const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const { svg } = await mermaid.render(id, chart);
+        const { svg } = await mermaid.render(renderId, chart);
 
         if (!cancelled && containerRef.current) {
           containerRef.current.innerHTML = svg;
+          setSvgHtml(svg);
           setError(null);
         }
       } catch (err) {
+        // Clean up any Mermaid temp elements that leaked into document.body
+        cleanupMermaidTempElements(renderId);
+
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Mermaid render failed");
         }
@@ -67,17 +82,78 @@ export function MermaidDiagram({ chart }: MermaidDiagramProps) {
     renderChart();
     return () => {
       cancelled = true;
+      cleanupMermaidTempElements(renderId);
     };
-  }, [chart, resolvedTheme]);
+  }, [chart, resolvedTheme, isStreaming]);
 
-  if (error) {
+  // During streaming, show a loading placeholder
+  if (isStreaming) {
     return (
-      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive">
-        <p className="font-medium">Mermaid 圖表渲染失敗</p>
-        <pre className="mt-1 whitespace-pre-wrap">{chart}</pre>
+      <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span>Mermaid 圖表載入中...</span>
       </div>
     );
   }
 
-  return <div ref={containerRef} className="mermaid-container" />;
+  // On error, show syntax-highlighted source code instead of a scary red box
+  if (error) {
+    return (
+      <div className="rounded-lg border border-border/60 overflow-hidden">
+        <div className="px-3 py-1.5 text-xs text-muted-foreground bg-muted/50 border-b border-border/60">
+          Mermaid 圖表渲染失敗 — 顯示原始碼
+        </div>
+        <SyntaxHighlighter
+          language="text"
+          style={oneDark}
+          PreTag="div"
+          customStyle={{
+            margin: 0,
+            borderRadius: 0,
+            fontSize: "0.85em",
+          }}
+        >
+          {chart}
+        </SyntaxHighlighter>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div
+        className="mermaid-container group relative cursor-pointer"
+        onClick={() => svgHtml && setModalOpen(true)}
+      >
+        <div ref={containerRef} />
+        {/* Hover overlay with zoom icon */}
+        <div className="mermaid-zoom-hint">
+          <Maximize2 className="h-4 w-4" />
+        </div>
+      </div>
+      {svgHtml && (
+        <MermaidZoomModal
+          svgHtml={svgHtml}
+          open={modalOpen}
+          onOpenChange={setModalOpen}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * Clean up Mermaid temporary elements that may have been injected into document.body.
+ * Mermaid v11 creates elements with ids like `d{renderId}` and `i{renderId}` during rendering.
+ */
+function cleanupMermaidTempElements(renderId: string) {
+  if (typeof document === "undefined") return;
+
+  const prefixes = ["d", "i"];
+  for (const prefix of prefixes) {
+    const el = document.getElementById(`${prefix}${renderId}`);
+    if (el && el.parentNode === document.body) {
+      el.remove();
+    }
+  }
 }

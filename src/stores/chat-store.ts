@@ -18,6 +18,18 @@ export interface UsageInfo {
   cost_usd: number;
 }
 
+export interface SubAgentActivity {
+  repoId: string;
+  repoName: string;
+  query: string;
+  status: "running" | "done" | "error";
+  textContent: string;
+  toolActivities: ToolActivity[];
+  error?: string;
+}
+
+export type OrchestratorPhaseType = "planning" | "execution" | "synthesis" | null;
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "tool";
@@ -27,6 +39,8 @@ export interface ChatMessage {
   isStreaming?: boolean;
   toolActivities?: ToolActivity[];
   usage?: UsageInfo;
+  orchestratorPhase?: OrchestratorPhaseType;
+  subAgentActivities?: SubAgentActivity[];
 }
 
 export interface ChatSession {
@@ -372,6 +386,120 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                 }
                 break;
 
+              case "phase_start":
+                get()._updateSession(chatId, (s) => ({
+                  messages: s.messages.map((m) =>
+                    m.id === assistantId
+                      ? { ...m, orchestratorPhase: (event.phase as OrchestratorPhaseType) || null }
+                      : m
+                  ),
+                }));
+                break;
+
+              case "phase_end":
+                get()._updateSession(chatId, (s) => ({
+                  messages: s.messages.map((m) =>
+                    m.id === assistantId
+                      ? { ...m, orchestratorPhase: null }
+                      : m
+                  ),
+                }));
+                break;
+
+              case "subagent_start":
+                if (event.subagentId) {
+                  get()._updateSession(chatId, (s) => ({
+                    messages: s.messages.map((m) =>
+                      m.id === assistantId
+                        ? {
+                            ...m,
+                            subAgentActivities: [
+                              ...(m.subAgentActivities || []),
+                              {
+                                repoId: event.subagentId!,
+                                repoName: event.subagentName || event.subagentId!,
+                                query: event.subagentQuery || "",
+                                status: "running" as const,
+                                textContent: "",
+                                toolActivities: [],
+                              },
+                            ],
+                          }
+                        : m
+                    ),
+                  }));
+                }
+                break;
+
+              case "subagent_event":
+                if (event.subagentId && event.innerEvent) {
+                  const inner = event.innerEvent;
+                  get()._updateSession(chatId, (s) => ({
+                    messages: s.messages.map((m) => {
+                      if (m.id !== assistantId || !m.subAgentActivities) return m;
+                      const activities = m.subAgentActivities.map((sa) => {
+                        if (sa.repoId !== event.subagentId) return sa;
+                        const updated = { ...sa };
+
+                        if (inner.type === "text" && inner.content) {
+                          updated.textContent = sa.textContent + inner.content;
+                        } else if (inner.type === "tool_use" && inner.tool) {
+                          updated.toolActivities = [
+                            ...sa.toolActivities,
+                            {
+                              id: `sa-ta-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                              tool: inner.tool,
+                              input: inner.toolInput,
+                              status: "running" as const,
+                              timestamp: Date.now(),
+                            },
+                          ];
+                        } else if (inner.type === "tool_result" && inner.tool) {
+                          updated.toolActivities = sa.toolActivities.map((ta, idx, arr) => {
+                            // Find last matching running tool
+                            const isLastRunning =
+                              ta.tool === inner.tool &&
+                              ta.status === "running" &&
+                              !arr.slice(idx + 1).some(
+                                (t) => t.tool === inner.tool && t.status === "running"
+                              );
+                            if (isLastRunning) {
+                              return { ...ta, status: "done" as const, result: inner.toolResult };
+                            }
+                            return ta;
+                          });
+                        } else if (inner.type === "error" && inner.error) {
+                          updated.error = inner.error;
+                        }
+
+                        return updated;
+                      });
+                      return { ...m, subAgentActivities: activities };
+                    }),
+                  }));
+                }
+                break;
+
+              case "subagent_end":
+                if (event.subagentId) {
+                  get()._updateSession(chatId, (s) => ({
+                    messages: s.messages.map((m) => {
+                      if (m.id !== assistantId || !m.subAgentActivities) return m;
+                      const activities = m.subAgentActivities.map((sa) =>
+                        sa.repoId === event.subagentId
+                          ? {
+                              ...sa,
+                              status: (event.error ? "error" : "done") as SubAgentActivity["status"],
+                              error: event.error || sa.error,
+                            }
+                          : sa
+                      );
+                      return { ...m, subAgentActivities: activities };
+                    }),
+                  }));
+                }
+                break;
+
               case "error":
                 get()._updateSession(chatId, () => ({
                   error: event.error || "Unknown error",
@@ -383,7 +511,16 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                   get()._updateSession(chatId, (s) => ({
                     messages: s.messages.map((m) =>
                       m.id === assistantId
-                        ? { ...m, usage: event.usage }
+                        ? {
+                            ...m,
+                            usage: m.usage
+                              ? {
+                                  input_tokens: m.usage.input_tokens + event.usage!.input_tokens,
+                                  output_tokens: m.usage.output_tokens + event.usage!.output_tokens,
+                                  cost_usd: m.usage.cost_usd + event.usage!.cost_usd,
+                                }
+                              : event.usage,
+                          }
                         : m
                     ),
                   }));

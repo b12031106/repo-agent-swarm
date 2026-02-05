@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo, memo } from "react";
 import { cn } from "@/lib/utils";
 import {
   User,
@@ -15,13 +15,24 @@ import {
   ChevronRight,
   Coins,
   MessageSquare,
+  GitBranch,
+  AlertCircle,
+  Brain,
+  Layers,
+  Sparkles,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { MermaidDiagram } from "./mermaid-diagram";
-import type { ChatMessage, ToolActivity, UsageInfo } from "@/hooks/useChat";
+import type {
+  ChatMessage,
+  ToolActivity,
+  UsageInfo,
+  SubAgentActivity,
+  OrchestratorPhaseType,
+} from "@/hooks/useChat";
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -48,7 +59,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
       <div
         className={cn(
-          "max-w-[80%] rounded-lg text-sm",
+          "max-w-[80%] rounded-lg message-content",
           isUser
             ? "bg-primary text-primary-foreground px-4 py-2"
             : "space-y-2"
@@ -61,11 +72,20 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         ) : (
           <>
             {/* Thinking indicator */}
-            {message.isStreaming && !message.content && (
+            {message.isStreaming && !message.content && !message.orchestratorPhase && (
               <ThinkingIndicator />
             )}
 
-            {/* Tool activities panel */}
+            {/* Orchestrator progress */}
+            {(message.orchestratorPhase || message.subAgentActivities?.length) && (
+              <OrchestratorProgress
+                phase={message.orchestratorPhase}
+                subAgentActivities={message.subAgentActivities}
+                isStreaming={message.isStreaming}
+              />
+            )}
+
+            {/* Tool activities panel (orchestrator's own tools, e.g. in synthesis) */}
             {message.toolActivities && message.toolActivities.length > 0 && (
               <ToolActivitiesPanel
                 activities={message.toolActivities}
@@ -86,7 +106,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                         const codeString = String(children).replace(/\n$/, "");
 
                         if (lang === "mermaid") {
-                          return <MermaidDiagram chart={codeString} />;
+                          return <MermaidDiagram chart={codeString} isStreaming={message.isStreaming} />;
                         }
 
                         if (lang) {
@@ -156,7 +176,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 /** Animated thinking indicator */
 function ThinkingIndicator() {
   return (
-    <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">
+    <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-3 text-muted-foreground">
       <Loader2 className="h-4 w-4 animate-spin" />
       <span>思考中...</span>
       <span className="flex gap-0.5">
@@ -177,6 +197,217 @@ function StreamingIndicator() {
     </div>
   );
 }
+
+// ─── Orchestrator Progress ───────────────────────────────────────────
+
+const PHASE_CONFIG: Record<string, { icon: typeof Brain; label: string; color: string }> = {
+  planning: { icon: Brain, label: "分析問題中...", color: "text-blue-500" },
+  execution: { icon: Layers, label: "Repo Agent 執行中...", color: "text-amber-500" },
+  synthesis: { icon: Sparkles, label: "綜合結果中...", color: "text-purple-500" },
+};
+
+function OrchestratorProgress({
+  phase,
+  subAgentActivities,
+  isStreaming,
+}: {
+  phase?: OrchestratorPhaseType;
+  subAgentActivities?: SubAgentActivity[];
+  isStreaming?: boolean;
+}) {
+  const hasActivities = subAgentActivities && subAgentActivities.length > 0;
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-card text-xs space-y-0">
+      {/* Phase indicator */}
+      {phase && (
+        <PhaseIndicator phase={phase} />
+      )}
+
+      {/* Sub-agent panels */}
+      {hasActivities && (
+        <div className="divide-y divide-border/40">
+          {subAgentActivities.map((sa) => (
+            <SubAgentPanel
+              key={sa.repoId}
+              activity={sa}
+              isStreaming={isStreaming}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PhaseIndicator({ phase }: { phase: string }) {
+  const config = PHASE_CONFIG[phase];
+  if (!config) return null;
+
+  const Icon = config.icon;
+
+  return (
+    <div className={cn("flex items-center gap-2 px-3 py-2", config.color)}>
+      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      <Icon className="h-3.5 w-3.5" />
+      <span className="font-medium">{config.label}</span>
+    </div>
+  );
+}
+
+const SubAgentPanel = memo(function SubAgentPanel({
+  activity,
+  isStreaming,
+}: {
+  activity: SubAgentActivity;
+  isStreaming?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(activity.status === "running");
+  const [autoCollapsed, setAutoCollapsed] = useState(false);
+
+  // Auto-collapse 1.5s after completion
+  useEffect(() => {
+    if (activity.status !== "running" && !autoCollapsed && expanded) {
+      const timer = setTimeout(() => {
+        setExpanded(false);
+        setAutoCollapsed(true);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [activity.status, autoCollapsed, expanded]);
+
+  // Expand when running
+  useEffect(() => {
+    if (activity.status === "running") {
+      setExpanded(true);
+      setAutoCollapsed(false);
+    }
+  }, [activity.status]);
+
+  const statusBadge = useMemo(() => {
+    switch (activity.status) {
+      case "running":
+        return (
+          <span className="flex items-center gap-1 text-amber-600">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            執行中
+          </span>
+        );
+      case "done":
+        return (
+          <span className="flex items-center gap-1 text-green-600">
+            <Check className="h-3 w-3" />
+            完成
+          </span>
+        );
+      case "error":
+        return (
+          <span className="flex items-center gap-1 text-red-500">
+            <AlertCircle className="h-3 w-3" />
+            錯誤
+          </span>
+        );
+    }
+  }, [activity.status]);
+
+  const runningToolCount = activity.toolActivities.filter(
+    (t) => t.status === "running"
+  ).length;
+
+  return (
+    <div>
+      {/* Header */}
+      <button
+        onClick={() => { setExpanded(!expanded); setAutoCollapsed(true); }}
+        className="flex w-full items-center gap-2 px-3 py-2 hover:bg-muted/50 transition-colors"
+      >
+        {expanded ? (
+          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+        )}
+        <GitBranch className="h-3 w-3 shrink-0 text-primary/70" />
+        <span className="font-medium text-foreground/80">{activity.repoName}</span>
+        <span className="ml-auto">{statusBadge}</span>
+      </button>
+
+      {/* Expanded content */}
+      {expanded && (
+        <div className="border-t border-border/40 px-3 pb-2 space-y-2">
+          {/* Query */}
+          {activity.query && (
+            <div className="pt-1.5">
+              <span className="text-[10px] font-medium text-muted-foreground">
+                查詢：
+              </span>
+              <p className="text-[11px] text-foreground/70 mt-0.5">
+                {activity.query}
+              </p>
+            </div>
+          )}
+
+          {/* Tool activities */}
+          {activity.toolActivities.length > 0 && (
+            <div className="space-y-0.5">
+              <span className="text-[10px] font-medium text-muted-foreground">
+                工具活動 ({activity.toolActivities.length})
+                {runningToolCount > 0 && ` - ${runningToolCount} 執行中`}
+              </span>
+              <div className="divide-y divide-border/30">
+                {activity.toolActivities.map((ta) => (
+                  <SubAgentToolRow key={ta.id} activity={ta} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Text content preview */}
+          {activity.textContent && (
+            <div className="mt-1">
+              <span className="text-[10px] font-medium text-muted-foreground">
+                回覆預覽
+              </span>
+              <div className="mt-0.5 max-h-40 overflow-y-auto rounded bg-muted/50 px-2 py-1.5 text-[11px] text-foreground/70 whitespace-pre-wrap">
+                {activity.textContent.length > 1000
+                  ? activity.textContent.slice(0, 1000) + "..."
+                  : activity.textContent}
+              </div>
+            </div>
+          )}
+
+          {/* Error message */}
+          {activity.error && (
+            <div className="rounded bg-red-500/10 px-2 py-1.5 text-[11px] text-red-500">
+              {activity.error}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
+
+function SubAgentToolRow({ activity }: { activity: ToolActivity }) {
+  const { icon: Icon, label, detail } = getToolInfo(activity);
+
+  return (
+    <div className="flex items-center gap-1.5 py-0.5 text-[11px]">
+      {activity.status === "running" ? (
+        <Loader2 className="h-2.5 w-2.5 shrink-0 animate-spin text-amber-600" />
+      ) : (
+        <Icon className="h-2.5 w-2.5 shrink-0 text-green-600" />
+      )}
+      <span className="text-foreground/70">{label}</span>
+      {detail && (
+        <span className="truncate text-muted-foreground" title={detail}>
+          {detail}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── Tool Activities Panel (original) ────────────────────────────────
 
 /** Collapsible tool activities panel */
 function ToolActivitiesPanel({

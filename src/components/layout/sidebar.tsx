@@ -12,6 +12,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { FontSizeToggle } from "@/components/font-size-toggle";
 import type { Repo } from "@/types";
 
 export function Sidebar() {
@@ -88,8 +89,9 @@ export function Sidebar() {
       </nav>
 
       {/* Theme toggle */}
-      <div className="border-t p-2">
+      <div className="border-t p-2 space-y-1">
         <ThemeToggle />
+        <FontSizeToggle />
       </div>
     </aside>
   );

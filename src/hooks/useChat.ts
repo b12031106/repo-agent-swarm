@@ -8,6 +8,8 @@ export type {
   ToolActivity,
   UsageInfo,
   ChatMessage,
+  SubAgentActivity,
+  OrchestratorPhaseType,
 } from "@/stores/chat-store";
 
 interface UseChatOptions {

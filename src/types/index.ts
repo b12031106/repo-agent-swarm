@@ -50,7 +50,14 @@ export type SSEEventType =
   | "tool_result"
   | "error"
   | "done"
-  | "usage";
+  | "usage"
+  | "phase_start"
+  | "phase_end"
+  | "subagent_start"
+  | "subagent_event"
+  | "subagent_end";
+
+export type OrchestratorPhase = "planning" | "execution" | "synthesis";
 
 export interface SSEEvent {
   type: SSEEventType;
@@ -89,4 +96,9 @@ export interface AgentStreamEvent {
   };
   sessionId?: string;
   error?: string;
+  phase?: OrchestratorPhase;
+  subagentId?: string;
+  subagentName?: string;
+  subagentQuery?: string;
+  innerEvent?: AgentStreamEvent;
 }

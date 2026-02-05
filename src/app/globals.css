@@ -25,6 +25,7 @@
   --input: 0 0% 89.8%;
   --ring: 0 0% 3.9%;
   --radius: 0.5rem;
+  --message-font-size: 14px;
 }
 
 .dark {
@@ -124,8 +125,21 @@ body {
   content: none;
 }
 
+.message-content {
+  font-size: var(--message-font-size);
+}
+.message-content .prose {
+  font-size: inherit;
+}
+.message-content .prose p,
+.message-content .prose li,
+.message-content .prose blockquote {
+  font-size: inherit;
+}
+
 /* Mermaid diagram container */
 .mermaid-container {
+  position: relative;
   display: flex;
   justify-content: center;
   padding: 1rem;
@@ -141,4 +155,50 @@ body {
 .mermaid-container svg {
   max-width: 100%;
   height: auto;
+}
+
+/* Hover zoom hint icon (top-right) */
+.mermaid-zoom-hint {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.375rem;
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.mermaid-container:hover .mermaid-zoom-hint {
+  opacity: 0.7;
+}
+
+/* Zoom modal canvas */
+.mermaid-zoom-canvas {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* SVG inside zoom modal: remove size constraints, disable pointer events on children */
+.mermaid-zoom-content svg {
+  max-width: none;
+}
+
+.mermaid-zoom-content svg * {
+  pointer-events: none;
+}
+
+/* Hide any Mermaid error elements that escape cleanup */
+body > [id^="dmermaid-"] {
+  display: none !important;
+}
+body > [id^="imermaid-"] {
+  display: none !important;
 }

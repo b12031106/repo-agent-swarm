@@ -6,6 +6,8 @@ import { ChatContainer } from "@/components/chat/chat-container";
 import { ConversationList } from "@/components/chat/conversation-list";
 import type { Repo, Conversation } from "@/types";
 import { Loader2, AlertCircle, Plus, History } from "lucide-react";
+import { DeleteConversationButton } from "@/components/chat/delete-conversation-button";
+import { useChatStore } from "@/stores/chat-store";
 
 function RepoChatContent({ repoId }: { repoId: string }) {
   const router = useRouter();
@@ -18,6 +20,9 @@ function RepoChatContent({ repoId }: { repoId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const isStreaming = useChatStore((s) =>
+    activeConvId ? (s.sessions.get(activeConvId)?.isLoading ?? false) : false
+  );
 
   useEffect(() => {
     const load = async () => {
@@ -137,6 +142,14 @@ function RepoChatContent({ repoId }: { repoId: string }) {
       {/* Chat header with conversation controls */}
       <div className="flex items-center gap-2 border-b px-4 py-3">
         <h2 className="font-semibold flex-1">{repo.name}</h2>
+        {activeConvId && (
+          <DeleteConversationButton
+            conversationId={activeConvId}
+            chatId={activeConvId}
+            onDeleted={handleDeleteConversation}
+            disabled={isStreaming}
+          />
+        )}
         <button
           onClick={startNewConversation}
           className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
