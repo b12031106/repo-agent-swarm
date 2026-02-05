@@ -4,6 +4,8 @@ import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { agentManager } from "@/lib/agents/agent-manager";
 import { createSSEStream } from "@/lib/streaming/sse-encoder";
+import { buildMessageWithAttachments } from "@/lib/uploads/message-builder";
+import { getUploadedFile } from "@/lib/uploads";
 import type { AgentStreamEvent } from "@/types";
 
 /** POST /api/chat/[repoId] - Send a message and get SSE stream response */
@@ -13,7 +15,7 @@ export async function POST(
 ) {
   const { repoId } = await params;
   const body = await request.json();
-  const { message, conversationId, model } = body;
+  const { message, conversationId, model, attachmentIds } = body;
 
   if (!message) {
     return new Response(JSON.stringify({ error: "message is required" }), {
@@ -84,6 +86,23 @@ export async function POST(
       .run();
   }
 
+  // Build enhanced message with attachment content
+  const enhancedMessage = buildMessageWithAttachments(message, attachmentIds);
+
+  // Build attachments metadata for DB storage
+  const attachmentsJsonStr = attachmentIds?.length
+    ? JSON.stringify(
+        attachmentIds
+          .map((id: string) => {
+            const a = getUploadedFile(id);
+            return a
+              ? { name: a.name, size: a.size, category: a.category }
+              : null;
+          })
+          .filter(Boolean)
+      )
+    : undefined;
+
   // Save user message
   db.insert(schema.messages)
     .values({
@@ -91,6 +110,7 @@ export async function POST(
       conversationId: convId,
       role: "user",
       content: message,
+      attachmentsJson: attachmentsJsonStr,
     })
     .run();
 
@@ -110,7 +130,7 @@ export async function POST(
     let fullAssistantText = "";
     let resultSessionId: string | undefined;
 
-    for await (const event of agent.query(message, sessionId, effectiveModel)) {
+    for await (const event of agent.query(enhancedMessage, sessionId, effectiveModel)) {
       // Accumulate assistant text
       if (event.type === "text" && event.content) {
         fullAssistantText += event.content;

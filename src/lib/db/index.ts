@@ -56,6 +56,13 @@ function createDb() {
     // Column already exists
   }
 
+  // Migration: add attachments_json column to messages
+  try {
+    db.run(sql`ALTER TABLE messages ADD COLUMN attachments_json TEXT`);
+  } catch {
+    // Column already exists
+  }
+
   // Create settings table
   db.run(sql`
     CREATE TABLE IF NOT EXISTS settings (

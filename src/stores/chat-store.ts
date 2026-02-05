@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { AgentStreamEvent } from "@/types";
+import type { AgentStreamEvent, UploadedAttachment, AttachmentCategory } from "@/types";
 
 export interface ToolActivity {
   id: string;
@@ -30,6 +30,13 @@ export interface SubAgentActivity {
 
 export type OrchestratorPhaseType = "planning" | "execution" | "synthesis" | null;
 
+export interface ChatMessageAttachment {
+  name: string;
+  size: number;
+  category: AttachmentCategory;
+  previewUrl?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "tool";
@@ -41,6 +48,7 @@ export interface ChatMessage {
   usage?: UsageInfo;
   orchestratorPhase?: OrchestratorPhaseType;
   subAgentActivities?: SubAgentActivity[];
+  attachments?: ChatMessageAttachment[];
 }
 
 export interface ChatSession {
@@ -54,6 +62,7 @@ export interface ChatSession {
   endpoint: string;
   historyLoaded: boolean;
   lastUserMessage: string | null;
+  lastUserAttachments: UploadedAttachment[] | null;
   model: string;
 }
 
@@ -75,6 +84,7 @@ function createEmptySession(
     endpoint,
     historyLoaded: false,
     lastUserMessage: null,
+    lastUserAttachments: null,
     model: model || "sonnet",
   };
 }
@@ -99,7 +109,7 @@ interface ChatStore {
   setSessionModel: (chatId: string, model: string) => void;
 
   // Message actions (operate on store, not dependent on React lifecycle)
-  sendMessage: (chatId: string, content: string) => void;
+  sendMessage: (chatId: string, content: string, attachments?: UploadedAttachment[]) => void;
   cancelStream: (chatId: string) => void;
   retryLastMessage: (chatId: string) => void;
   clearMessages: (chatId: string) => void;
@@ -194,17 +204,29 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         role: "user" | "assistant" | "tool";
         content: string;
         toolName: string | null;
+        attachmentsJson: string | null;
         createdAt: string;
       }> = await res.json();
 
       const chatMessages: ChatMessage[] = dbMessages
         .filter((m) => m.role !== "tool")
-        .map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          isStreaming: false,
-        }));
+        .map((m) => {
+          let attachments: ChatMessageAttachment[] | undefined;
+          if (m.attachmentsJson) {
+            try {
+              attachments = JSON.parse(m.attachmentsJson);
+            } catch {
+              // Ignore parse errors
+            }
+          }
+          return {
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            isStreaming: false,
+            attachments,
+          };
+        });
 
       if (chatMessages.length > 0) {
         get()._updateSession(chatId, () => ({ messages: chatMessages }));
@@ -216,9 +238,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
-  sendMessage: async (chatId, content) => {
+  sendMessage: async (chatId, content, attachments) => {
     const session = get().sessions.get(chatId);
-    if (!session || !content.trim() || session.isLoading) return;
+    if (!session || session.isLoading) return;
+    if (!content.trim() && (!attachments || attachments.length === 0)) return;
 
     // Enforce max concurrent streams
     const allSessions = get().sessions;
@@ -248,6 +271,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       id: `user-${Date.now()}`,
       role: "user",
       content,
+      attachments: attachments?.map((a) => ({
+        name: a.name,
+        size: a.size,
+        category: a.category,
+      })),
     };
     const assistantId = `assistant-${Date.now()}`;
     const assistantMsg: ChatMessage = {
@@ -264,6 +292,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       isLoading: true,
       error: null,
       lastUserMessage: content,
+      lastUserAttachments: attachments || null,
       abortController: controller,
     }));
 
@@ -276,6 +305,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           message: content,
           conversationId: currentSession.conversationId,
           model: currentSession.model,
+          attachmentIds: attachments?.map((a) => a.id),
         }),
         signal: controller.signal,
       });
@@ -574,6 +604,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (!session || !session.lastUserMessage || session.isLoading) return;
 
     const lastMsg = session.lastUserMessage;
+    const lastAttachments = session.lastUserAttachments || undefined;
 
     get()._updateSession(chatId, (s) => {
       const msgs = [...s.messages];
@@ -589,7 +620,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     });
 
     // Re-send after state update
-    setTimeout(() => get().sendMessage(chatId, lastMsg), 0);
+    setTimeout(() => get().sendMessage(chatId, lastMsg, lastAttachments), 0);
   },
 
   clearMessages: (chatId) => {

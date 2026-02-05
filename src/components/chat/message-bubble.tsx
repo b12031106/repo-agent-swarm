@@ -33,6 +33,7 @@ import type {
   SubAgentActivity,
   OrchestratorPhaseType,
 } from "@/hooks/useChat";
+import { AttachmentPreview } from "./attachment-preview";
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -66,8 +67,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         )}
       >
         {isUser ? (
-          <div className="whitespace-pre-wrap break-words">
-            {message.content}
+          <div>
+            {message.attachments && message.attachments.length > 0 && (
+              <div className="mb-2">
+                <AttachmentPreview attachments={message.attachments} compact />
+              </div>
+            )}
+            <div className="whitespace-pre-wrap break-words">
+              {message.content}
+            </div>
           </div>
         ) : (
           <>

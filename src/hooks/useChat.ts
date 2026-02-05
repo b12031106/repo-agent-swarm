@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useCallback } from "react";
 import { useChatStore } from "@/stores/chat-store";
+import type { UploadedAttachment } from "@/types";
 
 // Re-export types from store for backward compatibility
 export type {
   ToolActivity,
   UsageInfo,
   ChatMessage,
+  ChatMessageAttachment,
   SubAgentActivity,
   OrchestratorPhaseType,
 } from "@/stores/chat-store";
@@ -60,7 +62,8 @@ export function useChat(options: UseChatOptions) {
   // The stream continues in the store even when the component is unmounted.
 
   const sendMessage = useCallback(
-    (content: string) => store.sendMessage(chatId, content),
+    (content: string, attachments?: UploadedAttachment[]) =>
+      store.sendMessage(chatId, content, attachments),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [chatId]
   );

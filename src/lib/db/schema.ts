@@ -53,6 +53,7 @@ export const messages = sqliteTable("messages", {
   role: text("role", { enum: ["user", "assistant", "tool"] }).notNull(),
   content: text("content").notNull(),
   toolName: text("tool_name"),
+  attachmentsJson: text("attachments_json"),
   createdAt: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),

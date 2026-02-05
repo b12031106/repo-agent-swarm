@@ -64,6 +64,17 @@ export interface SSEEvent {
   data: string;
 }
 
+// Attachment types
+export type AttachmentCategory = "image" | "pdf" | "text";
+
+export interface UploadedAttachment {
+  id: string;
+  name: string;
+  size: number;
+  category: AttachmentCategory;
+  serverPath: string;
+}
+
 // API request/response types
 export interface CreateRepoRequest {
   githubUrl: string;
@@ -81,6 +92,7 @@ export interface ChatRequest {
   message: string;
   conversationId?: string;
   model?: string;
+  attachmentIds?: string[];
 }
 
 export interface AgentStreamEvent {

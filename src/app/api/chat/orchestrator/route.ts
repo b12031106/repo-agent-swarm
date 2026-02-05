@@ -4,12 +4,14 @@ import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { OrchestratorAgent } from "@/lib/agents/orchestrator-agent";
 import { createSSEStream } from "@/lib/streaming/sse-encoder";
+import { buildMessageWithAttachments, buildAttachmentMetadata } from "@/lib/uploads/message-builder";
+import { getUploadedFile } from "@/lib/uploads";
 import type { AgentStreamEvent } from "@/types";
 
 /** POST /api/chat/orchestrator - Send a message to the orchestrator */
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { message, conversationId, model } = body;
+  const { message, conversationId, model, attachmentIds } = body;
 
   if (!message) {
     return new Response(JSON.stringify({ error: "message is required" }), {
@@ -74,6 +76,25 @@ export async function POST(request: NextRequest) {
       .run();
   }
 
+  // Build enhanced message with full attachment content
+  const enhancedMessage = buildMessageWithAttachments(message, attachmentIds);
+  // Build short metadata for planning phase
+  const messageWithMeta = message + buildAttachmentMetadata(attachmentIds);
+
+  // Build attachments metadata for DB storage
+  const attachmentsJsonStr = attachmentIds?.length
+    ? JSON.stringify(
+        attachmentIds
+          .map((id: string) => {
+            const a = getUploadedFile(id);
+            return a
+              ? { name: a.name, size: a.size, category: a.category }
+              : null;
+          })
+          .filter(Boolean)
+      )
+    : undefined;
+
   // Save user message
   db.insert(schema.messages)
     .values({
@@ -81,6 +102,7 @@ export async function POST(request: NextRequest) {
       conversationId: convId,
       role: "user",
       content: message,
+      attachmentsJson: attachmentsJsonStr,
     })
     .run();
 
@@ -116,7 +138,7 @@ export async function POST(request: NextRequest) {
     let resultSessionId: string | undefined;
     let totalUsage = { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
 
-    for await (const event of orchestrator.query(message, sessionId, effectiveModel)) {
+    for await (const event of orchestrator.query(enhancedMessage, sessionId, effectiveModel)) {
       // Track phase transitions
       if (event.type === "phase_start") {
         currentPhase = event.phase || null;
