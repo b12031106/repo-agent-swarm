@@ -33,7 +33,9 @@ export class ClaudeCodeProvider implements AgentProvider {
       args.push("--resume", options.sessionId);
     }
 
-    args.push(options.message);
+    // Pass message via stdin to avoid ARG_MAX limits with long messages
+    // (e.g. synthesis phase with all repo agent results)
+    args.push("-");
 
     const claudePath = path.join(
       process.cwd(),
@@ -52,6 +54,7 @@ export class ClaudeCodeProvider implements AgentProvider {
       stdio: ["pipe", "pipe", "pipe"],
     });
 
+    proc.stdin.write(options.message);
     proc.stdin.end();
 
     yield* this.processStream(proc);
