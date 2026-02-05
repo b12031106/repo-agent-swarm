@@ -26,11 +26,12 @@ interface UseChatOptions {
 }
 
 export function useChat(options: UseChatOptions) {
-  // Stable chat ID: use conversationId if given, otherwise generate one per mount
+  // Stable chat ID: fixed on first mount (either conversationId or generated).
+  // This MUST NOT change when conversationId is assigned mid-stream.
   const chatId = useMemo(
     () => options.conversationId || `new-${Date.now()}`,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [options.conversationId]
+    []
   );
 
   const store = useChatStore();

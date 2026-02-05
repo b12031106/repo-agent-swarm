@@ -17,6 +17,7 @@ function OrchestratorContent() {
   const [activeConvId, setActiveConvId] = useState<string | undefined>(
     searchParams.get("conv") || undefined
   );
+  const [chatKey, setChatKey] = useState(() => Date.now());
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const isStreaming = useChatStore((s) =>
@@ -35,6 +36,7 @@ function OrchestratorContent() {
         const urlConv = searchParams.get("conv");
         if (!urlConv && orchConvs.length > 0) {
           setActiveConvId(orchConvs[0].id);
+          setChatKey(Date.now());
           router.replace(`/orchestrator?conv=${orchConvs[0].id}`, {
             scroll: false,
           });
@@ -62,6 +64,7 @@ function OrchestratorContent() {
 
   const startNewConversation = useCallback(() => {
     setActiveConvId(undefined);
+    setChatKey(Date.now());
     router.replace("/orchestrator", { scroll: false });
     setShowHistory(false);
   }, [router]);
@@ -69,6 +72,7 @@ function OrchestratorContent() {
   const switchConversation = useCallback(
     (convId: string) => {
       setActiveConvId(convId);
+      setChatKey(Date.now());
       router.replace(`/orchestrator?conv=${convId}`, { scroll: false });
       setShowHistory(false);
     },
@@ -138,6 +142,7 @@ function OrchestratorContent() {
 
       <div className="flex-1 overflow-hidden">
         <ChatContainer
+          key={chatKey}
           endpoint="/api/chat/orchestrator"
           conversationId={activeConvId}
           onConversationId={handleConversationId}

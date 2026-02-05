@@ -17,6 +17,7 @@ function RepoChatContent({ repoId }: { repoId: string }) {
   const [activeConvId, setActiveConvId] = useState<string | undefined>(
     searchParams.get("conv") || undefined
   );
+  const [chatKey, setChatKey] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -44,6 +45,7 @@ function RepoChatContent({ repoId }: { repoId: string }) {
           const urlConv = searchParams.get("conv");
           if (!urlConv && convData.length > 0) {
             setActiveConvId(convData[0].id);
+            setChatKey(Date.now());
             router.replace(`/repos/${repoId}?conv=${convData[0].id}`, {
               scroll: false,
             });
@@ -73,6 +75,7 @@ function RepoChatContent({ repoId }: { repoId: string }) {
 
   const startNewConversation = useCallback(() => {
     setActiveConvId(undefined);
+    setChatKey(Date.now());
     router.replace(`/repos/${repoId}`, { scroll: false });
     setShowHistory(false);
   }, [repoId, router]);
@@ -80,6 +83,7 @@ function RepoChatContent({ repoId }: { repoId: string }) {
   const switchConversation = useCallback(
     (convId: string) => {
       setActiveConvId(convId);
+      setChatKey(Date.now());
       router.replace(`/repos/${repoId}?conv=${convId}`, { scroll: false });
       setShowHistory(false);
     },
@@ -180,9 +184,10 @@ function RepoChatContent({ repoId }: { repoId: string }) {
         />
       )}
 
-      {/* Chat — no key remount, state lives in Zustand store */}
+      {/* Chat — key forces remount on conversation switch */}
       <div className="flex-1 overflow-hidden">
         <ChatContainer
+          key={chatKey}
           endpoint={`/api/chat/${repoId}`}
           conversationId={activeConvId}
           onConversationId={handleConversationId}

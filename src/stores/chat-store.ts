@@ -184,7 +184,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   loadHistory: async (chatId, conversationId) => {
     const session = get().sessions.get(chatId);
-    if (!session || session.historyLoaded) return;
+    if (!session || session.historyLoaded || session.isLoading) return;
 
     get()._updateSession(chatId, () => ({
       isLoadingHistory: true,

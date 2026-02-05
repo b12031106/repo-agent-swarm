@@ -147,13 +147,15 @@ export class OrchestratorAgent {
       }
     }
 
-    // Extract JSON from response
-    const jsonMatch = fullText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
+    // Extract JSON from response — try markdown code block first, then raw JSON
+    const codeBlockMatch = fullText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+    const rawJsonMatch = fullText.match(/\{[\s\S]*\}/);
+    const jsonStr = codeBlockMatch?.[1] || rawJsonMatch?.[0];
+    if (!jsonStr) {
       throw new Error("No JSON found in planning response");
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as PlanResult;
+    const parsed = JSON.parse(jsonStr) as PlanResult;
 
     // Validate repo IDs
     const validRepoIds = new Set(this.config.repos.map((r) => r.repoId));
@@ -214,20 +216,26 @@ export class OrchestratorAgent {
         agentEntries.push({ query: q, agent, gen, text: "", done: false });
       }
 
-      // Merge streams using Promise.race pattern
-      while (agentEntries.some((e) => !e.done)) {
-        const pending = agentEntries
-          .filter((e) => !e.done)
-          .map((entry) =>
-            entry.gen.next().then((result) => ({ entry, result }))
-          );
+      // Merge streams: maintain one pending promise per agent to avoid losing events
+      const pendingMap = new Map<
+        string,
+        Promise<{ entry: (typeof agentEntries)[number]; result: IteratorResult<AgentStreamEvent> }>
+      >();
 
-        if (pending.length === 0) break;
+      // Initialize first .next() for each agent
+      for (const entry of agentEntries) {
+        pendingMap.set(
+          entry.query.repoId,
+          entry.gen.next().then((result) => ({ entry, result }))
+        );
+      }
 
-        const { entry, result } = await Promise.race(pending);
+      while (pendingMap.size > 0) {
+        const { entry, result } = await Promise.race(pendingMap.values());
 
         if (result.done) {
           entry.done = true;
+          pendingMap.delete(entry.query.repoId);
           this.activeProcesses.delete(entry.agent);
 
           results.push({
@@ -266,6 +274,12 @@ export class OrchestratorAgent {
           subagentName: entry.query.repoName,
           innerEvent: event,
         };
+
+        // Queue next .next() only for this consumed agent
+        pendingMap.set(
+          entry.query.repoId,
+          entry.gen.next().then((r) => ({ entry, result: r }))
+        );
       }
     }
 
