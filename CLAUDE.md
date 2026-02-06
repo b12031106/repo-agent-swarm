@@ -69,10 +69,25 @@ claude --print --output-format stream-json --verbose \
 
 ### 資料層
 
-- SQLite + Drizzle ORM，4 張表：`repos`, `conversations`, `messages`, `usageRecords`
+- SQLite + Drizzle ORM，5 張表：`repos`, `settings`, `conversations`, `messages`, `usageRecords`
 - DB 路徑：`./data/repo-agent-swarm.db`（首次查詢自動建立）
 - Schema 定義在 `src/lib/db/schema.ts`，連線與 inline migration 在 `src/lib/db/index.ts`
 - 新欄位的 migration 使用 `ALTER TABLE ADD COLUMN` + try-catch 包裹
+- `settings` 表為 key-value 結構，用於全域設定（如 `orchestratorCustomPrompt`）
+
+### 檔案上傳
+
+- 支援圖片（png/jpg/gif/webp）、PDF、文字/程式碼檔案（詳見 `src/lib/uploads/index.ts` 的 `ALLOWED_EXTENSIONS`）
+- 上傳路徑：`./data/uploads/[uuid]/`，大小限制：圖片 10MB / PDF 20MB / 文字 1MB
+- 文字檔內容直接內嵌至訊息（最多 50K 字元），圖片/PDF 提供路徑讓 agent 用 Read 工具讀取
+- `message-builder.ts` 負責將附件整合到發送給 CLI 的訊息中
+- 自動清理 24 小時未使用的上傳
+
+### 自訂角色提示
+
+- Repo Agent：每個 repo 可設定 `customPrompt`（DB `repos.custom_prompt`）
+- Orchestrator：全域設定（DB `settings` 表，key = `orchestratorCustomPrompt`）
+- 預設提示定義在 `src/lib/constants/default-prompts.ts`
 
 ### SSE 串流
 
@@ -98,16 +113,20 @@ claude --print --output-format stream-json --verbose \
 | `/api/repos` | GET/POST | 列出/新增 repo（POST 觸發 clone） |
 | `/api/repos/[id]` | GET/DELETE | 取得/移除 repo |
 | `/api/repos/[id]/sync` | POST | 拉取最新變更 |
-| `/api/chat/[repoId]` | POST | 單 repo 對話（SSE stream，body 含 `message`, `conversationId?`, `model?`） |
+| `/api/chat/[repoId]` | POST | 單 repo 對話（SSE stream，body 含 `message`, `conversationId?`, `model?`, `attachmentIds?`） |
+| `/api/chat/[repoId]/history` | GET | 取得對話歷史訊息 |
 | `/api/chat/orchestrator` | POST | 跨 repo 對話（SSE stream，同上） |
 | `/api/conversations` | GET/POST | 對話列表/載入訊息 |
 | `/api/conversations/[id]` | DELETE | 刪除對話 |
+| `/api/upload` | POST | 上傳附件（multipart/form-data） |
+| `/api/settings` | GET/PUT | 全域設定（如 orchestrator 自訂提示） |
 | `/api/usage` | GET | Token 使用統計 |
 
 ## 執行時路徑
 
 - Clone 的 repos：`./repos/[name]-[id-prefix]/`
 - SQLite DB：`./data/repo-agent-swarm.db`
+- 上傳檔案：`./data/uploads/[uuid]/`
 - Claude CLI binary：`./node_modules/.bin/claude`
 
 ## 語言
