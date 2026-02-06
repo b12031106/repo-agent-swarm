@@ -31,7 +31,10 @@ export async function PATCH(
 ) {
   const { repoId } = await params;
   const body = await request.json();
-  const { customPrompt, name } = body;
+  const {
+    customPrompt, name, description, domain, serviceType,
+    dependenciesJson, exposedApisJson, techStack, teamOwner, profileStatus,
+  } = body;
 
   const db = getDb();
 
@@ -52,6 +55,14 @@ export async function PATCH(
   if (name !== undefined && name.trim()) {
     updates.name = name.trim();
   }
+  if (description !== undefined) updates.description = description?.trim() || null;
+  if (domain !== undefined) updates.domain = domain?.trim() || null;
+  if (serviceType !== undefined) updates.serviceType = serviceType?.trim() || null;
+  if (dependenciesJson !== undefined) updates.dependenciesJson = typeof dependenciesJson === "string" ? dependenciesJson : JSON.stringify(dependenciesJson);
+  if (exposedApisJson !== undefined) updates.exposedApisJson = typeof exposedApisJson === "string" ? exposedApisJson : JSON.stringify(exposedApisJson);
+  if (techStack !== undefined) updates.techStack = techStack?.trim() || null;
+  if (teamOwner !== undefined) updates.teamOwner = teamOwner?.trim() || null;
+  if (profileStatus !== undefined) updates.profileStatus = profileStatus;
 
   if (Object.keys(updates).length > 0) {
     db.update(schema.repos)

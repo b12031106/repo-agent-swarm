@@ -10,6 +10,7 @@ import {
   Users,
   MessageSquare,
   ChevronRight,
+  FileSearch,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { FontSizeToggle } from "@/components/font-size-toggle";
@@ -67,6 +68,12 @@ export function Sidebar() {
           icon={Users}
           label="總顧問"
           active={pathname === "/orchestrator"}
+        />
+        <NavItem
+          href="/analysis"
+          icon={FileSearch}
+          label="需求分析"
+          active={pathname === "/analysis"}
         />
 
         {/* Repo list */}

@@ -16,6 +16,17 @@ export const repos = sqliteTable("repos", {
     .$defaultFn(() => new Date().toISOString()),
   lastSyncedAt: text("last_synced_at"),
   customPrompt: text("custom_prompt"),
+  // Service registry metadata
+  description: text("description"),
+  domain: text("domain"),
+  serviceType: text("service_type"),
+  dependenciesJson: text("dependencies_json"),
+  exposedApisJson: text("exposed_apis_json"),
+  techStack: text("tech_stack"),
+  teamOwner: text("team_owner"),
+  profileStatus: text("profile_status", {
+    enum: ["empty", "draft", "confirmed"],
+  }).default("empty"),
 });
 
 export const settings = sqliteTable("settings", {
@@ -37,6 +48,9 @@ export const conversations = sqliteTable("conversations", {
     .notNull()
     .default(false),
   model: text("model").default("sonnet"),
+  type: text("type", {
+    enum: ["chat", "analysis"],
+  }).default("chat"),
   createdAt: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),

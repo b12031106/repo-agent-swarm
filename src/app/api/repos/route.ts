@@ -18,7 +18,7 @@ export async function GET() {
 /** POST /api/repos - Register and clone a new repo */
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { githubUrl, name, customPrompt } = body;
+  const { githubUrl, name, customPrompt, description, domain, serviceType, techStack, teamOwner } = body;
 
   if (!githubUrl) {
     return NextResponse.json(
@@ -42,6 +42,12 @@ export async function POST(request: NextRequest) {
       localPath,
       status: "cloning",
       customPrompt: customPrompt?.trim() || null,
+      description: description?.trim() || null,
+      domain: domain?.trim() || null,
+      serviceType: serviceType?.trim() || null,
+      techStack: techStack?.trim() || null,
+      teamOwner: teamOwner?.trim() || null,
+      profileStatus: description || domain || serviceType ? "draft" : "empty",
     })
     .run();
 

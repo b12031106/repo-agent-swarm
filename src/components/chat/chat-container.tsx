@@ -14,6 +14,7 @@ interface ChatContainerProps {
   conversationId?: string;
   onConversationId?: (id: string) => void;
   initialModel?: string;
+  onMounted?: () => void;
 }
 
 export function ChatContainer({
@@ -22,6 +23,7 @@ export function ChatContainer({
   conversationId,
   onConversationId,
   initialModel,
+  onMounted,
 }: ChatContainerProps) {
   const {
     messages,
@@ -36,6 +38,12 @@ export function ChatContainer({
   } = useChat({ endpoint, conversationId, onConversationId, model: initialModel });
 
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Notify parent when mounted
+  useEffect(() => {
+    onMounted?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {

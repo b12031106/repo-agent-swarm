@@ -1,16 +1,18 @@
 import {
   getOrchestratorPlanningPrompt,
   getOrchestratorSynthesisPrompt,
+  getOrchestratorReflectionPrompt,
+  getIterativePlanningPrompt,
+  buildRepoDescriptions,
+  type RepoMetaForPrompt,
+  type IterationContext,
 } from "./prompts";
 import { getDefaultProvider } from "./providers";
 import type { AgentProvider } from "./providers";
 import { RepoAgent } from "./repo-agent";
 import type { AgentStreamEvent } from "@/types";
 
-interface RepoInfo {
-  repoId: string;
-  repoName: string;
-  repoPath: string;
+interface RepoInfo extends RepoMetaForPrompt {
   customPrompt?: string | null;
 }
 
@@ -33,19 +35,33 @@ interface SubAgentResult {
   error?: string;
 }
 
+interface ReflectionResult {
+  assessment: string;
+  sufficient: boolean;
+  additionalQueries: Array<PlanQuery & { reason?: string }>;
+}
+
 export interface OrchestratorConfig {
   repos: RepoInfo[];
   model?: string;
   maxBudgetUsd?: number;
   provider?: AgentProvider;
   customPrompt?: string | null;
+  // Multi-iteration config
+  maxIterations?: number;
+  structuredOutput?: boolean;
+  planningModel?: string;
+  reflectionModel?: string;
+  synthesisModel?: string;
 }
 
 const MAX_PARALLEL_AGENTS = 3;
+const DEFAULT_MAX_ITERATIONS = 1;
+const BUDGET_SAFETY_THRESHOLD = 0.8;
 
 /**
  * OrchestratorAgent coordinates analysis across multiple repos
- * using a three-phase approach: Planning → Execution → Synthesis.
+ * using a multi-phase approach: [Planning → Execution → Reflection]* → Synthesis.
  */
 export class OrchestratorAgent {
   private config: OrchestratorConfig;
@@ -73,71 +89,158 @@ export class OrchestratorAgent {
   ): AsyncGenerator<AgentStreamEvent> {
     const sid = conversationSessionId || this.sessionId;
     const effectiveModel = model || this.config.model || "sonnet";
+    const maxIterations = this.config.maxIterations ?? DEFAULT_MAX_ITERATIONS;
+    const totalBudget = this.config.maxBudgetUsd || 5.0;
 
-    // Phase 1: Planning
-    yield { type: "phase_start", phase: "planning" };
+    let allResults: SubAgentResult[] = [];
+    let accumulatedCost = 0;
+    let iteration = 0;
+    let needsMoreInfo = true;
 
-    let plan: PlanResult;
-    try {
-      plan = yield* this.runPlanning(message, effectiveModel);
-    } catch (err) {
-      // Fallback: query all repos
-      console.warn("[OrchestratorAgent] Planning failed, querying all repos:", err);
-      plan = {
-        reasoning: "Planning failed, querying all repos as fallback",
-        queries: this.config.repos.map((r) => ({
-          repoId: r.repoId,
-          repoName: r.repoName,
-          question: message,
-        })),
-      };
-    }
+    const repoDescriptions = buildRepoDescriptions(this.config.repos);
 
-    yield { type: "phase_end", phase: "planning" };
+    while (needsMoreInfo && iteration < maxIterations) {
+      iteration++;
 
-    // If no queries needed (general chat), go straight to synthesis
-    let subAgentResults: SubAgentResult[] = [];
+      // Emit iteration_start for multi-iteration runs
+      if (maxIterations > 1) {
+        yield {
+          type: "iteration_start",
+          iteration,
+          maxIterations,
+        };
+      }
 
-    if (plan.queries.length > 0) {
+      // Phase 1: Planning
+      yield { type: "phase_start", phase: "planning" };
+
+      let plan: PlanResult;
+      try {
+        const iterContext: IterationContext = {
+          iteration,
+          previousResults: allResults.map((r) => ({
+            repoName: r.repoName,
+            summary: r.text.length > 500 ? r.text.slice(0, 500) + "..." : r.text,
+          })),
+        };
+
+        plan = yield* this.runPlanning(
+          message,
+          repoDescriptions,
+          iterContext,
+        );
+      } catch (err) {
+        console.warn("[OrchestratorAgent] Planning failed, querying all repos:", err);
+        plan = {
+          reasoning: "Planning failed, querying all repos as fallback",
+          queries: this.config.repos.map((r) => ({
+            repoId: r.repoId,
+            repoName: r.repoName,
+            question: message,
+          })),
+        };
+      }
+
+      yield { type: "phase_end", phase: "planning" };
+
+      // If no queries needed (general chat), skip to synthesis
+      if (plan.queries.length === 0) {
+        needsMoreInfo = false;
+        break;
+      }
+
       // Phase 2: Parallel Execution
       yield { type: "phase_start", phase: "execution" };
 
-      subAgentResults = yield* this.runExecution(plan.queries, effectiveModel);
+      const batchResults = yield* this.runExecution(plan.queries, effectiveModel);
+      allResults = [...allResults, ...batchResults];
 
       yield { type: "phase_end", phase: "execution" };
+
+      // Check budget before reflection
+      // Rough cost estimation: each iteration ~$0.5-1.5
+      accumulatedCost += batchResults.length * 0.5 + 0.1; // rough estimate
+      if (accumulatedCost >= totalBudget * BUDGET_SAFETY_THRESHOLD) {
+        console.warn("[OrchestratorAgent] Budget threshold reached, ending iterations");
+        needsMoreInfo = false;
+        break;
+      }
+
+      // Phase 3: Reflection (only if maxIterations > 1 and not last iteration)
+      if (maxIterations > 1 && iteration < maxIterations) {
+        yield { type: "phase_start", phase: "reflection" };
+
+        try {
+          const reflectionResult = yield* this.runReflection(
+            message,
+            allResults,
+            repoDescriptions,
+          );
+
+          if (reflectionResult.sufficient || reflectionResult.additionalQueries.length === 0) {
+            needsMoreInfo = false;
+          }
+          // If not sufficient, the next iteration's planning will pick it up
+        } catch (err) {
+          console.warn("[OrchestratorAgent] Reflection failed, proceeding to synthesis:", err);
+          needsMoreInfo = false;
+        }
+
+        yield { type: "phase_end", phase: "reflection" };
+      } else {
+        needsMoreInfo = false;
+      }
+
+      if (maxIterations > 1) {
+        yield {
+          type: "iteration_end",
+          iteration,
+          maxIterations,
+        };
+      }
     }
 
-    // Phase 3: Synthesis
+    // Phase 4: Synthesis
     yield { type: "phase_start", phase: "synthesis" };
 
-    yield* this.runSynthesis(message, subAgentResults, sid, effectiveModel);
+    yield* this.runSynthesis(
+      message,
+      allResults,
+      repoDescriptions,
+      sid,
+      effectiveModel,
+    );
 
     yield { type: "phase_end", phase: "synthesis" };
   }
 
   /**
    * Phase 1: Ask the LLM to analyze which repos to query.
-   * Uses haiku for cost efficiency.
    */
   private async *runPlanning(
     message: string,
-    _effectiveModel: string,
+    repoDescriptions: string,
+    iterContext?: IterationContext,
   ): AsyncGenerator<AgentStreamEvent, PlanResult> {
-    const repoDescriptions = this.config.repos
-      .map((r) => `- **${r.repoName}** (id: ${r.repoId}): ${r.repoPath}`)
-      .join("\n");
+    const planningModel = this.config.planningModel || "haiku";
 
-    const systemPrompt = getOrchestratorPlanningPrompt(
-      repoDescriptions,
-      this.config.customPrompt,
-    );
+    const systemPrompt = iterContext && iterContext.iteration > 1
+      ? getIterativePlanningPrompt(
+          repoDescriptions,
+          this.config.customPrompt,
+          iterContext,
+        )
+      : getOrchestratorPlanningPrompt(
+          repoDescriptions,
+          this.config.customPrompt,
+        );
 
     let fullText = "";
 
     for await (const event of this.provider.query({
       message,
       systemPrompt,
-      model: "haiku",
+      model: planningModel,
       maxBudgetUsd: 0.1,
       cwd: process.cwd(),
     })) {
@@ -147,7 +250,7 @@ export class OrchestratorAgent {
       }
     }
 
-    // Extract JSON from response — try markdown code block first, then raw JSON
+    // Extract JSON from response
     const codeBlockMatch = fullText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
     const rawJsonMatch = fullText.match(/\{[\s\S]*\}/);
     const jsonStr = codeBlockMatch?.[1] || rawJsonMatch?.[0];
@@ -216,13 +319,12 @@ export class OrchestratorAgent {
         agentEntries.push({ query: q, agent, gen, text: "", done: false });
       }
 
-      // Merge streams: maintain one pending promise per agent to avoid losing events
+      // Merge streams: maintain one pending promise per agent
       const pendingMap = new Map<
         string,
         Promise<{ entry: (typeof agentEntries)[number]; result: IteratorResult<AgentStreamEvent> }>
       >();
 
-      // Initialize first .next() for each agent
       for (const entry of agentEntries) {
         pendingMap.set(
           entry.query.repoId,
@@ -257,17 +359,14 @@ export class OrchestratorAgent {
 
         const event = result.value;
 
-        // Accumulate text
         if (event.type === "text" && event.content) {
           entry.text += event.content;
         }
 
-        // Track errors
         if (event.type === "error" && event.error) {
           entry.error = event.error;
         }
 
-        // Wrap and yield as subagent_event
         yield {
           type: "subagent_event",
           subagentId: entry.query.repoId,
@@ -275,7 +374,6 @@ export class OrchestratorAgent {
           innerEvent: event,
         };
 
-        // Queue next .next() only for this consumed agent
         pendingMap.set(
           entry.query.repoId,
           entry.gen.next().then((r) => ({ entry, result: r }))
@@ -287,22 +385,89 @@ export class OrchestratorAgent {
   }
 
   /**
-   * Phase 3: Synthesize all results into a final response.
+   * Phase 3: Reflection — evaluate if gathered information is sufficient.
+   */
+  private async *runReflection(
+    originalMessage: string,
+    subAgentResults: SubAgentResult[],
+    repoDescriptions: string,
+  ): AsyncGenerator<AgentStreamEvent, ReflectionResult> {
+    const reflectionModel = this.config.reflectionModel || "haiku";
+
+    const systemPrompt = getOrchestratorReflectionPrompt(
+      repoDescriptions,
+      this.config.customPrompt,
+    );
+
+    // Build context for reflection
+    let contextMessage = `User question: ${originalMessage}\n\n`;
+    contextMessage += "## Collected Analysis Results\n\n";
+    for (const result of subAgentResults) {
+      const summary = result.text.length > 800
+        ? result.text.slice(0, 800) + "..."
+        : result.text;
+      contextMessage += `### ${result.repoName}\n`;
+      contextMessage += `**Query:** ${result.query}\n`;
+      if (result.error) contextMessage += `**Error:** ${result.error}\n`;
+      contextMessage += `**Analysis:** ${summary}\n\n`;
+    }
+    contextMessage += "Please evaluate if this information is sufficient.";
+
+    let fullText = "";
+
+    for await (const event of this.provider.query({
+      message: contextMessage,
+      systemPrompt,
+      model: reflectionModel,
+      maxBudgetUsd: 0.1,
+      cwd: process.cwd(),
+    })) {
+      if (event.type === "text" && event.content) {
+        fullText += event.content;
+        yield { type: "text", content: event.content, phase: "reflection" };
+      }
+    }
+
+    // Parse reflection JSON
+    const codeBlockMatch = fullText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+    const rawJsonMatch = fullText.match(/\{[\s\S]*\}/);
+    const jsonStr = codeBlockMatch?.[1] || rawJsonMatch?.[0];
+    if (!jsonStr) {
+      return { assessment: "Parse failed", sufficient: true, additionalQueries: [] };
+    }
+
+    try {
+      const parsed = JSON.parse(jsonStr) as ReflectionResult;
+
+      // Validate repo IDs in additional queries
+      const validRepoIds = new Set(this.config.repos.map((r) => r.repoId));
+      parsed.additionalQueries = (parsed.additionalQueries || []).filter(
+        (q) => validRepoIds.has(q.repoId)
+      );
+
+      return parsed;
+    } catch {
+      return { assessment: "Parse failed", sufficient: true, additionalQueries: [] };
+    }
+  }
+
+  /**
+   * Phase 4: Synthesize all results into a final response.
    * Uses --resume for multi-turn memory.
    */
   private async *runSynthesis(
     originalMessage: string,
     subAgentResults: SubAgentResult[],
+    repoDescriptions: string,
     sessionId?: string | null,
     effectiveModel?: string,
   ): AsyncGenerator<AgentStreamEvent> {
-    const repoDescriptions = this.config.repos
-      .map((r) => `- **${r.repoName}**: ${r.repoPath}`)
-      .join("\n");
+    const synthesisModel = this.config.synthesisModel || effectiveModel || "sonnet";
 
     const systemPrompt = getOrchestratorSynthesisPrompt(
       repoDescriptions,
       this.config.customPrompt,
+      { structuredOutput: this.config.structuredOutput },
     );
 
     // Build context message
@@ -331,7 +496,7 @@ export class OrchestratorAgent {
     for await (const event of this.provider.query({
       message: contextMessage,
       systemPrompt,
-      model: effectiveModel || "sonnet",
+      model: synthesisModel,
       maxBudgetUsd: this.config.maxBudgetUsd || 2.0,
       cwd: process.cwd(),
       sessionId,
@@ -365,6 +530,7 @@ export class OrchestratorAgent {
         yield* this.runSynthesis(
           originalMessage,
           subAgentResults,
+          repoDescriptions,
           null,
           effectiveModel,
         );

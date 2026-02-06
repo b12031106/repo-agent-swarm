@@ -63,6 +63,19 @@ function createDb() {
     // Column already exists
   }
 
+  // Migration: add service registry metadata columns to repos
+  try { db.run(sql`ALTER TABLE repos ADD COLUMN description TEXT`); } catch { /* exists */ }
+  try { db.run(sql`ALTER TABLE repos ADD COLUMN domain TEXT`); } catch { /* exists */ }
+  try { db.run(sql`ALTER TABLE repos ADD COLUMN service_type TEXT`); } catch { /* exists */ }
+  try { db.run(sql`ALTER TABLE repos ADD COLUMN dependencies_json TEXT`); } catch { /* exists */ }
+  try { db.run(sql`ALTER TABLE repos ADD COLUMN exposed_apis_json TEXT`); } catch { /* exists */ }
+  try { db.run(sql`ALTER TABLE repos ADD COLUMN tech_stack TEXT`); } catch { /* exists */ }
+  try { db.run(sql`ALTER TABLE repos ADD COLUMN team_owner TEXT`); } catch { /* exists */ }
+  try { db.run(sql`ALTER TABLE repos ADD COLUMN profile_status TEXT DEFAULT 'empty'`); } catch { /* exists */ }
+
+  // Migration: add type column to conversations
+  try { db.run(sql`ALTER TABLE conversations ADD COLUMN type TEXT DEFAULT 'chat'`); } catch { /* exists */ }
+
   // Create settings table
   db.run(sql`
     CREATE TABLE IF NOT EXISTS settings (

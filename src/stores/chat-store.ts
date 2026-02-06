@@ -28,7 +28,7 @@ export interface SubAgentActivity {
   error?: string;
 }
 
-export type OrchestratorPhaseType = "planning" | "execution" | "synthesis" | null;
+export type OrchestratorPhaseType = "planning" | "execution" | "reflection" | "synthesis" | null;
 
 export interface ChatMessageAttachment {
   name: string;
@@ -49,6 +49,8 @@ export interface ChatMessage {
   orchestratorPhase?: OrchestratorPhaseType;
   subAgentActivities?: SubAgentActivity[];
   attachments?: ChatMessageAttachment[];
+  currentIteration?: number;
+  maxIterations?: number;
 }
 
 export interface ChatSession {
@@ -434,6 +436,24 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                       : m
                   ),
                 }));
+                break;
+
+              case "iteration_start":
+                get()._updateSession(chatId, (s) => ({
+                  messages: s.messages.map((m) =>
+                    m.id === assistantId
+                      ? {
+                          ...m,
+                          currentIteration: (event as AgentStreamEvent & { iteration?: number }).iteration,
+                          maxIterations: (event as AgentStreamEvent & { maxIterations?: number }).maxIterations,
+                        }
+                      : m
+                  ),
+                }));
+                break;
+
+              case "iteration_end":
+                // No special handling needed, iteration counter already set by iteration_start
                 break;
 
               case "subagent_start":

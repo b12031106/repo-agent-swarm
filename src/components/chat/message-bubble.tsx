@@ -90,6 +90,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 phase={message.orchestratorPhase}
                 subAgentActivities={message.subAgentActivities}
                 isStreaming={message.isStreaming}
+                currentIteration={message.currentIteration}
+                maxIterations={message.maxIterations}
               />
             )}
 
@@ -211,22 +213,54 @@ function StreamingIndicator() {
 const PHASE_CONFIG: Record<string, { icon: typeof Brain; label: string; color: string }> = {
   planning: { icon: Brain, label: "分析問題中...", color: "text-blue-500" },
   execution: { icon: Layers, label: "Repo Agent 執行中...", color: "text-amber-500" },
+  reflection: { icon: Search, label: "反思評估中...", color: "text-teal-500" },
   synthesis: { icon: Sparkles, label: "綜合結果中...", color: "text-purple-500" },
 };
+
+function IterationIndicator({
+  current,
+  max,
+}: {
+  current: number;
+  max: number;
+}) {
+  if (max <= 1) return null;
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 text-[10px] text-muted-foreground border-b border-border/40">
+      <span className="font-medium">迭代 {current}/{max}</span>
+      <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+        <div
+          className="h-full bg-primary/60 rounded-full transition-all duration-500"
+          style={{ width: `${(current / max) * 100}%` }}
+        />
+      </div>
+    </div>
+  );
+}
 
 function OrchestratorProgress({
   phase,
   subAgentActivities,
   isStreaming,
+  currentIteration,
+  maxIterations,
 }: {
   phase?: OrchestratorPhaseType;
   subAgentActivities?: SubAgentActivity[];
   isStreaming?: boolean;
+  currentIteration?: number;
+  maxIterations?: number;
 }) {
   const hasActivities = subAgentActivities && subAgentActivities.length > 0;
 
   return (
     <div className="rounded-lg border border-border/60 bg-card text-xs space-y-0">
+      {/* Iteration progress */}
+      {currentIteration && maxIterations && (
+        <IterationIndicator current={currentIteration} max={maxIterations} />
+      )}
+
       {/* Phase indicator */}
       {phase && (
         <PhaseIndicator phase={phase} />

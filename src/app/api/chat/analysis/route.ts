@@ -8,7 +8,10 @@ import { buildMessageWithAttachments, buildAttachmentMetadata } from "@/lib/uplo
 import { getUploadedFile } from "@/lib/uploads";
 import type { AgentStreamEvent } from "@/types";
 
-/** POST /api/chat/orchestrator - Send a message to the orchestrator */
+/**
+ * POST /api/chat/analysis - Requirement analysis mode
+ * Forces structured output, multi-iteration, and stronger models.
+ */
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const { message, conversationId, model, attachmentIds } = body;
@@ -42,7 +45,6 @@ export async function POST(request: NextRequest) {
   // Get or create conversation
   let convId = conversationId;
   let sessionId: string | undefined;
-  let convModel: string | undefined;
 
   if (convId) {
     const conv = db
@@ -52,11 +54,8 @@ export async function POST(request: NextRequest) {
       .get();
     if (conv) {
       sessionId = conv.sessionId || undefined;
-      convModel = conv.model || undefined;
     }
   }
-
-  const effectiveModel = model || convModel || "sonnet";
 
   if (!convId) {
     convId = uuidv4();
@@ -64,22 +63,16 @@ export async function POST(request: NextRequest) {
       .values({
         id: convId,
         repoId: null,
-        title: message.slice(0, 100),
+        title: `[分析] ${message.slice(0, 80)}`,
         isOrchestrator: true,
-        model: effectiveModel,
+        model: model || "sonnet",
+        type: "analysis",
       })
-      .run();
-  } else if (model && model !== convModel) {
-    db.update(schema.conversations)
-      .set({ model })
-      .where(eq(schema.conversations.id, convId))
       .run();
   }
 
   // Build enhanced message with full attachment content
   const enhancedMessage = buildMessageWithAttachments(message, attachmentIds);
-  // Build short metadata for planning phase
-  const messageWithMeta = message + buildAttachmentMetadata(attachmentIds);
 
   // Build attachments metadata for DB storage
   const attachmentsJsonStr = attachmentIds?.length
@@ -106,14 +99,14 @@ export async function POST(request: NextRequest) {
     })
     .run();
 
-  // Read orchestrator custom prompt from settings
+  // Read orchestrator custom prompt
   const orchestratorPromptSetting = db
     .select()
     .from(schema.settings)
     .where(eq(schema.settings.key, "orchestrator_custom_prompt"))
     .get();
 
-  // Create orchestrator agent with full service registry metadata
+  // Create orchestrator agent with analysis-mode settings
   const orchestrator = new OrchestratorAgent({
     repos: readyRepos.map((r) => ({
       repoId: r.id,
@@ -130,6 +123,13 @@ export async function POST(request: NextRequest) {
       profileStatus: r.profileStatus,
     })),
     customPrompt: orchestratorPromptSetting?.value || null,
+    // Analysis mode: stronger models and multi-iteration
+    maxIterations: 3,
+    structuredOutput: true,
+    planningModel: "sonnet",
+    reflectionModel: "sonnet",
+    synthesisModel: "opus",
+    maxBudgetUsd: 5.0,
   });
 
   if (sessionId) {
@@ -137,8 +137,6 @@ export async function POST(request: NextRequest) {
   }
 
   const finalConvId = convId;
-
-  // Track current phase to know when to accumulate text
   let currentPhase: string | null = null;
 
   async function* streamWithPersistence(): AsyncGenerator<AgentStreamEvent> {
@@ -146,15 +144,13 @@ export async function POST(request: NextRequest) {
     let resultSessionId: string | undefined;
     let totalUsage = { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
 
-    for await (const event of orchestrator.query(enhancedMessage, sessionId, effectiveModel)) {
-      // Track phase transitions
+    for await (const event of orchestrator.query(enhancedMessage, sessionId, model || "sonnet")) {
       if (event.type === "phase_start") {
         currentPhase = event.phase || null;
       } else if (event.type === "phase_end") {
         currentPhase = null;
       }
 
-      // Only accumulate text from synthesis phase (the final response)
       if (event.type === "text" && event.content && currentPhase === "synthesis") {
         fullAssistantText += event.content;
       }
@@ -163,14 +159,12 @@ export async function POST(request: NextRequest) {
         resultSessionId = event.sessionId;
       }
 
-      // Accumulate usage from all phases (done events from subagents too)
       if (event.type === "done" && event.usage) {
         totalUsage.input_tokens += event.usage.input_tokens;
         totalUsage.output_tokens += event.usage.output_tokens;
         totalUsage.cost_usd += event.usage.cost_usd;
       }
 
-      // Also accumulate usage from subagent inner events
       if (
         event.type === "subagent_event" &&
         event.innerEvent?.type === "done" &&
@@ -186,7 +180,6 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    // Save aggregated usage
     if (totalUsage.input_tokens > 0 || totalUsage.output_tokens > 0) {
       db.insert(schema.usageRecords)
         .values({
@@ -223,8 +216,6 @@ export async function POST(request: NextRequest) {
 
   const stream = createSSEStream(streamWithPersistence(), {
     onCancel: (accumulatedText) => {
-      // accumulatedText from SSE encoder includes ALL text events (planning + synthesis)
-      // We only want synthesis text, but on cancel we save whatever we have
       if (accumulatedText) {
         db.insert(schema.messages)
           .values({

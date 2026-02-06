@@ -1,4 +1,10 @@
 export type RepoStatus = "cloning" | "ready" | "error" | "syncing";
+export type ProfileStatus = "empty" | "draft" | "confirmed";
+
+export interface RepoDependency {
+  repoId?: string;
+  name: string;
+}
 
 export interface Repo {
   id: string;
@@ -10,7 +16,18 @@ export interface Repo {
   createdAt: string;
   lastSyncedAt: string | null;
   customPrompt: string | null;
+  // Service registry metadata
+  description: string | null;
+  domain: string | null;
+  serviceType: string | null;
+  dependenciesJson: string | null;
+  exposedApisJson: string | null;
+  techStack: string | null;
+  teamOwner: string | null;
+  profileStatus: ProfileStatus | null;
 }
+
+export type ConversationType = "chat" | "analysis";
 
 export interface Conversation {
   id: string;
@@ -19,6 +36,7 @@ export interface Conversation {
   title: string;
   isOrchestrator: boolean;
   model: string | null;
+  type: ConversationType | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -55,9 +73,11 @@ export type SSEEventType =
   | "phase_end"
   | "subagent_start"
   | "subagent_event"
-  | "subagent_end";
+  | "subagent_end"
+  | "iteration_start"
+  | "iteration_end";
 
-export type OrchestratorPhase = "planning" | "execution" | "synthesis";
+export type OrchestratorPhase = "planning" | "execution" | "reflection" | "synthesis";
 
 export interface SSEEvent {
   type: SSEEventType;
@@ -113,4 +133,6 @@ export interface AgentStreamEvent {
   subagentName?: string;
   subagentQuery?: string;
   innerEvent?: AgentStreamEvent;
+  iteration?: number;
+  maxIterations?: number;
 }

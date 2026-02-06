@@ -134,6 +134,7 @@ export function RepoList() {
             if (!open) setSettingsRepoId(null);
           }}
           onSaved={handleSettingsSaved}
+          allRepos={repos}
         />
       )}
     </div>
