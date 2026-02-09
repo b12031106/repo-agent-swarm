@@ -46,11 +46,7 @@ export class ClaudeCodeProvider implements AgentProvider {
 
     const proc = spawn(claudePath, args, {
       cwd: options.cwd || process.cwd(),
-      env: {
-        ...process.env,
-        HOME: process.env.HOME,
-        PATH: process.env.PATH,
-      },
+      env: process.env,
       stdio: ["pipe", "pipe", "pipe"],
     });
 
