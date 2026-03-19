@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Repo Agent Swarm
 
-## Getting Started
+多 Repo AI 程式碼分析平台，透過 Claude Code CLI 實現串流式對話，支援單一 repo 問答、跨 repo 總顧問、以及 PM 需求分析模式。
 
-First, run the development server:
+## 功能
+
+- **單 Repo 對話** — 針對單一程式碼庫進行 AI 問答、程式碼分析
+- **跨 Repo 總顧問 (Orchestrator)** — 跨多個 repo 的架構層級分析，自動分派子 agent
+- **需求分析模式** — 上傳 PRD 文件，AI 進行多輪迭代分析，產出結構化評估
+- **服務目錄 (Service Registry)** — 自動掃描 repo 元資料（技術棧、API、依賴關係）
+- **檔案上傳** — 支援圖片、PDF、程式碼檔案作為對話附件
+- **模型切換** — 每個對話可獨立選擇 Sonnet / Haiku / Opus
+- **Token 使用追蹤** — 記錄每次對話的 token 用量與費用
+
+## 技術棧
+
+- **前端**：Next.js 16 (App Router) + React 19 + TailwindCSS 4 + shadcn/ui + Zustand
+- **後端**：Next.js API Routes + SQLite (better-sqlite3 + Drizzle ORM)
+- **AI**：Claude Code CLI (`@anthropic-ai/claude-code`) via `child_process.spawn`
+- **串流**：Server-Sent Events (SSE)
+
+## 快速開始
+
+### 前置需求
+
+- Node.js 20+
+- pnpm
+- Claude Code CLI（需有效的 API key 或登入）
+
+### 安裝與啟動
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+
+# 若 better-sqlite3 編譯失敗
+pnpm rebuild better-sqlite3
+
+# 開發模式
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+開啟 http://localhost:3000。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 開發指令
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+pnpm dev          # 開發伺服器 (port 3000)
+pnpm build        # 生產構建
+pnpm start        # 生產伺服器
+pnpm lint         # ESLint 檢查
+```
 
-## Learn More
+## 頁面
 
-To learn more about Next.js, take a look at the following resources:
+| 路徑 | 功能 |
+|-----|------|
+| `/` | 首頁 |
+| `/repos` | Repo 管理（新增、刪除、同步） |
+| `/repos/[repoId]` | 單 Repo 對話 |
+| `/orchestrator` | 跨 Repo 總顧問對話 |
+| `/analysis` | PM 需求分析模式 |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 架構
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+前端 (React + Zustand Chat Store + SSE)
+    ↓
+API Routes (Next.js App Router, /api/*)
+    ↓
+Agent Layer (AgentProvider → CLI spawn)  →  SQLite (Drizzle ORM)
+```
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+詳細架構說明請參考 [CLAUDE.md](./CLAUDE.md)。

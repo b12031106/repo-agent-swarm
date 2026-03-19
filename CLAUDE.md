@@ -113,9 +113,12 @@ claude --print --output-format stream-json --verbose \
 | `/api/repos` | GET/POST | 列出/新增 repo（POST 觸發 clone） |
 | `/api/repos/[id]` | GET/DELETE | 取得/移除 repo |
 | `/api/repos/[id]/sync` | POST | 拉取最新變更 |
+| `/api/repos/[id]/scan` | POST | 自動掃描 repo 元資料（SSE stream） |
+| `/api/repos/[id]/scan-with-doc` | POST | 文件輔助掃描（body 含 `attachmentId?`, `documentText?`） |
 | `/api/chat/[repoId]` | POST | 單 repo 對話（SSE stream，body 含 `message`, `conversationId?`, `model?`, `attachmentIds?`） |
 | `/api/chat/[repoId]/history` | GET | 取得對話歷史訊息 |
 | `/api/chat/orchestrator` | POST | 跨 repo 對話（SSE stream，同上） |
+| `/api/chat/analysis` | POST | 需求分析模式（SSE stream，structuredOutput + 多輪迭代 + Opus） |
 | `/api/conversations` | GET/POST | 對話列表/載入訊息 |
 | `/api/conversations/[id]` | DELETE | 刪除對話 |
 | `/api/upload` | POST | 上傳附件（multipart/form-data） |
