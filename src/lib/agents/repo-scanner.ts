@@ -40,7 +40,6 @@ export async function* scanRepo(
     systemPrompt,
     tools: "Read,Glob,Grep,Bash",
     model: "sonnet",
-    maxBudgetUsd: 0.3,
     cwd: repoPath,
   })) {
     if (event.type === "text" && event.content) {
@@ -94,7 +93,6 @@ Use both the code analysis and the document above to produce accurate metadata. 
     systemPrompt,
     tools: "Read,Glob,Grep,Bash",
     model: "sonnet",
-    maxBudgetUsd: 0.3,
     cwd: repoPath,
   })) {
     if (event.type === "text" && event.content) {

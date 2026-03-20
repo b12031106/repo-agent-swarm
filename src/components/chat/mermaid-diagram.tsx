@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useTheme } from "next-themes";
 import { Loader2, Maximize2 } from "lucide-react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -12,6 +12,10 @@ interface MermaidDiagramProps {
   isStreaming?: boolean;
 }
 
+// Global render queue to prevent concurrent mermaid renders
+// (mermaid uses global state that breaks with parallel renders)
+let renderQueue: Promise<void> = Promise.resolve();
+
 export function MermaidDiagram({ chart, isStreaming }: MermaidDiagramProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -19,74 +23,94 @@ export function MermaidDiagram({ chart, isStreaming }: MermaidDiagramProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const { resolvedTheme } = useTheme();
 
-  useEffect(() => {
-    // Skip rendering while streaming - chart content is likely incomplete
-    if (isStreaming) return;
+  const doRender = useCallback(async (cancelled: { current: boolean }) => {
+    if (cancelled.current) return;
 
-    let cancelled = false;
     const renderId = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-    async function renderChart() {
-      if (!containerRef.current) return;
+    try {
+      const mermaid = (await import("mermaid")).default;
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: resolvedTheme === "dark" ? "dark" : "default",
+        securityLevel: "loose",
+        suppressErrorRendering: true,
+        themeVariables:
+          resolvedTheme === "dark"
+            ? {
+                primaryColor: "#3b82f6",
+                primaryTextColor: "#f8fafc",
+                primaryBorderColor: "#60a5fa",
+                lineColor: "#94a3b8",
+                secondaryColor: "#475569",
+                tertiaryColor: "#334155",
+                textColor: "#e2e8f0",
+                mainBkg: "#1e293b",
+                nodeBorder: "#60a5fa",
+              }
+            : {
+                primaryColor: "#dbeafe",
+                primaryTextColor: "#1e293b",
+                primaryBorderColor: "#3b82f6",
+                lineColor: "#64748b",
+                secondaryColor: "#f1f5f9",
+                tertiaryColor: "#e2e8f0",
+                textColor: "#1e293b",
+                mainBkg: "#eff6ff",
+                nodeBorder: "#3b82f6",
+              },
+      });
+
+      if (cancelled.current) return;
+
+      // Wait for next animation frame to ensure DOM is fully laid out
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      if (cancelled.current) return;
+
+      // Render in a real, visible offscreen container so SVG layout calculation works.
+      // Using opacity:0 (not visibility:hidden) so the browser performs full layout.
+      const offscreen = document.createElement("div");
+      offscreen.style.cssText =
+        "position:fixed;left:0;top:0;width:2000px;min-height:200px;opacity:0;pointer-events:none;z-index:-1;";
+      document.body.appendChild(offscreen);
 
       try {
-        const mermaid = (await import("mermaid")).default;
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: resolvedTheme === "dark" ? "dark" : "default",
-          securityLevel: "loose",
-          suppressErrorRendering: true,
-          themeVariables:
-            resolvedTheme === "dark"
-              ? {
-                  primaryColor: "#3b82f6",
-                  primaryTextColor: "#f8fafc",
-                  primaryBorderColor: "#60a5fa",
-                  lineColor: "#94a3b8",
-                  secondaryColor: "#475569",
-                  tertiaryColor: "#334155",
-                  textColor: "#e2e8f0",
-                  mainBkg: "#1e293b",
-                  nodeBorder: "#60a5fa",
-                }
-              : {
-                  primaryColor: "#dbeafe",
-                  primaryTextColor: "#1e293b",
-                  primaryBorderColor: "#3b82f6",
-                  lineColor: "#64748b",
-                  secondaryColor: "#f1f5f9",
-                  tertiaryColor: "#e2e8f0",
-                  textColor: "#1e293b",
-                  mainBkg: "#eff6ff",
-                  nodeBorder: "#3b82f6",
-                },
-        });
+        const { svg } = await mermaid.render(renderId, chart, offscreen);
 
-        const { svg } = await mermaid.render(renderId, chart);
-
-        if (!cancelled && containerRef.current) {
+        if (!cancelled.current && containerRef.current) {
           containerRef.current.innerHTML = svg;
           setSvgHtml(svg);
           setError(null);
         }
-      } catch (err) {
-        // Clean up any Mermaid temp elements that leaked into document.body
+      } finally {
+        offscreen.remove();
         cleanupMermaidTempElements(renderId);
-
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Mermaid render failed");
-        }
+      }
+    } catch (err) {
+      cleanupMermaidTempElements(renderId);
+      console.error("[MermaidDiagram] render failed:", err);
+      if (!cancelled.current) {
+        setError(err instanceof Error ? err.message : "Mermaid render failed");
       }
     }
+  }, [chart, resolvedTheme]);
 
-    renderChart();
+  useEffect(() => {
+    if (isStreaming) return;
+
+    const cancelled = { current: false };
+
+    // Queue renders sequentially to avoid mermaid global state conflicts
+    renderQueue = renderQueue.then(() => {
+      if (cancelled.current) return;
+      return doRender(cancelled);
+    });
+
     return () => {
-      cancelled = true;
-      cleanupMermaidTempElements(renderId);
+      cancelled.current = true;
     };
-  }, [chart, resolvedTheme, isStreaming]);
+  }, [chart, resolvedTheme, isStreaming, doRender]);
 
-  // During streaming, show a loading placeholder
   if (isStreaming) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
@@ -96,7 +120,6 @@ export function MermaidDiagram({ chart, isStreaming }: MermaidDiagramProps) {
     );
   }
 
-  // On error, show syntax-highlighted source code instead of a scary red box
   if (error) {
     return (
       <div className="rounded-lg border border-border/60 overflow-hidden">
@@ -126,10 +149,17 @@ export function MermaidDiagram({ chart, isStreaming }: MermaidDiagramProps) {
         onClick={() => svgHtml && setModalOpen(true)}
       >
         <div ref={containerRef} />
-        {/* Hover overlay with zoom icon */}
-        <div className="mermaid-zoom-hint">
-          <Maximize2 className="h-4 w-4" />
-        </div>
+        {!svgHtml && (
+          <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>圖表渲染中...</span>
+          </div>
+        )}
+        {svgHtml && (
+          <div className="mermaid-zoom-hint">
+            <Maximize2 className="h-4 w-4" />
+          </div>
+        )}
       </div>
       {svgHtml && (
         <MermaidZoomModal

@@ -136,4 +136,5 @@ export interface AgentStreamEvent {
   innerEvent?: AgentStreamEvent;
   iteration?: number;
   maxIterations?: number;
+  budgetExhausted?: boolean;
 }

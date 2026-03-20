@@ -67,7 +67,7 @@ export class RepoAgent {
       systemPrompt,
       tools: "Read,Glob,Grep,Bash",
       model: model || this.config.model || "sonnet",
-      maxBudgetUsd: this.config.maxBudgetUsd || 0.5,
+      maxBudgetUsd: this.config.maxBudgetUsd,
       cwd: this.config.repoPath,
       sessionId,
     })) {

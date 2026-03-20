@@ -129,7 +129,6 @@ export async function POST(request: NextRequest) {
     planningModel: "sonnet",
     reflectionModel: "sonnet",
     synthesisModel: "opus",
-    maxBudgetUsd: 5.0,
   });
 
   if (sessionId) {

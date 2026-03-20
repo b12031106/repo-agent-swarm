@@ -48,7 +48,7 @@ AgentManager (singleton)           ← 生命週期管理、快取
 
 - **AgentProvider** (`src/lib/agents/providers/types.ts`)：定義 `query()` → `AsyncGenerator<AgentStreamEvent>` 介面
 - **ClaudeCodeProvider** (`src/lib/agents/providers/claude-code-provider.ts`)：封裝 `spawn` + stream parsing
-- **RepoAgent** (`src/lib/agents/repo-agent.ts`)：單 repo 對話，工具 `Read,Glob,Grep,Bash`，預算 $0.5/query，session resume 失敗自動重試
+- **RepoAgent** (`src/lib/agents/repo-agent.ts`)：單 repo 對話，工具 `Read,Glob,Grep,Bash`，預設無預算上限（可透過 config 設定），session resume 失敗自動重試
 - **OrchestratorAgent** (`src/lib/agents/orchestrator-agent.ts`)：跨 repo 總顧問，`--agents` flag 定義 subagents，預算 $2.0/query
 - **Provider registry** (`src/lib/agents/providers/index.ts`)：`registerProvider()`, `getProvider()`, `getDefaultProvider()`
 
@@ -56,7 +56,7 @@ Claude Code CLI 呼叫格式：
 ```bash
 claude --print --output-format stream-json --verbose \
   --model sonnet --system-prompt "..." --tools "Read,Glob,Grep,Bash" \
-  --dangerously-skip-permissions --max-budget-usd 0.5 \
+  --dangerously-skip-permissions [--max-budget-usd N] \
   [--resume sessionId] "user message"
 ```
 

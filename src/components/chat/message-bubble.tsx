@@ -95,14 +95,6 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               />
             )}
 
-            {/* Tool activities panel (orchestrator's own tools, e.g. in synthesis) */}
-            {message.toolActivities && message.toolActivities.length > 0 && (
-              <ToolActivitiesPanel
-                activities={message.toolActivities}
-                isStreaming={message.isStreaming}
-              />
-            )}
-
             {/* Assistant text content */}
             {message.content && (
               <div className="rounded-lg bg-muted px-4 py-2">
@@ -159,6 +151,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                   )}
                 </div>
               </div>
+            )}
+
+            {/* Tool activities panel — below text content */}
+            {message.toolActivities && message.toolActivities.length > 0 && (
+              <ToolActivitiesPanel
+                activities={message.toolActivities}
+                isStreaming={message.isStreaming}
+              />
             )}
 
             {/* Streaming indicator - shown when content is flowing */}
@@ -451,7 +451,7 @@ function SubAgentToolRow({ activity }: { activity: ToolActivity }) {
 
 // ─── Tool Activities Panel (original) ────────────────────────────────
 
-/** Collapsible tool activities panel */
+/** Collapsible tool activities panel — collapsed by default, shows latest activity inline */
 function ToolActivitiesPanel({
   activities,
   isStreaming,
@@ -459,39 +459,63 @@ function ToolActivitiesPanel({
   activities: ToolActivity[];
   isStreaming?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(true);
-  const runningCount = activities.filter((a) => a.status === "running").length;
+  const [expanded, setExpanded] = useState(false);
   const doneCount = activities.filter((a) => a.status === "done").length;
+  const runningCount = activities.filter((a) => a.status === "running").length;
+
+  // Latest activity for the collapsed summary line
+  const latest = activities[activities.length - 1];
+  const latestInfo = latest ? getToolInfo(latest) : null;
 
   return (
     <div className="rounded-lg border border-border/60 bg-card text-xs">
-      {/* Header */}
+      {/* Header — shows latest activity inline when collapsed */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-muted-foreground hover:bg-muted/50 transition-colors"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-muted-foreground hover:bg-muted/50 transition-colors"
       >
         {expanded ? (
-          <ChevronDown className="h-3 w-3" />
+          <ChevronDown className="h-3 w-3 shrink-0" />
         ) : (
-          <ChevronRight className="h-3 w-3" />
+          <ChevronRight className="h-3 w-3 shrink-0" />
         )}
-        <span className="font-medium">
-          工具活動
-        </span>
-        <span className="ml-auto flex items-center gap-2">
-          {runningCount > 0 && (
-            <span className="flex items-center gap-1 text-amber-600">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              {runningCount} 執行中
+
+        {!expanded && latestInfo ? (
+          /* Collapsed: show latest activity */
+          <>
+            {latest.status === "running" ? (
+              <Loader2 className="h-3 w-3 shrink-0 animate-spin text-amber-600" />
+            ) : (
+              <latestInfo.icon className="h-3 w-3 shrink-0 text-muted-foreground" />
+            )}
+            <span className="text-foreground/70 truncate">{latestInfo.label}</span>
+            {latestInfo.detail && (
+              <span className="truncate text-muted-foreground">{latestInfo.detail}</span>
+            )}
+            <span className="ml-auto shrink-0 text-muted-foreground">
+              {activities.length} 步驟
             </span>
-          )}
-          {doneCount > 0 && (
-            <span className="flex items-center gap-1 text-green-600">
-              <Check className="h-3 w-3" />
-              {doneCount} 完成
+          </>
+        ) : (
+          /* Expanded header */
+          <>
+            <span className="font-medium">工具活動</span>
+            <span className="ml-auto flex items-center gap-2">
+              {runningCount > 0 && (
+                <span className="flex items-center gap-1 text-amber-600">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {runningCount} 執行中
+                </span>
+              )}
+              {doneCount > 0 && (
+                <span className="flex items-center gap-1 text-green-600">
+                  <Check className="h-3 w-3" />
+                  {doneCount} 完成
+                </span>
+              )}
             </span>
-          )}
-        </span>
+          </>
+        )}
       </button>
 
       {/* Activity list */}

@@ -575,6 +575,19 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                     ),
                   }));
                 }
+                // Warn user when response was truncated due to budget exhaustion
+                if ((event as AgentStreamEvent & { budgetExhausted?: boolean }).budgetExhausted) {
+                  get()._updateSession(chatId, (s) => ({
+                    messages: s.messages.map((m) =>
+                      m.id === assistantId
+                        ? {
+                            ...m,
+                            content: m.content + "\n\n⚠️ *回應因預算上限而被截斷，可能不完整。請重試或調整預算設定。*",
+                          }
+                        : m
+                    ),
+                  }));
+                }
                 break;
             }
           } catch {

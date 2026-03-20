@@ -90,7 +90,7 @@ export class OrchestratorAgent {
     const sid = conversationSessionId || this.sessionId;
     const effectiveModel = model || this.config.model || "sonnet";
     const maxIterations = this.config.maxIterations ?? DEFAULT_MAX_ITERATIONS;
-    const totalBudget = this.config.maxBudgetUsd || 5.0;
+    const totalBudget = this.config.maxBudgetUsd || Infinity;
 
     let allResults: SubAgentResult[] = [];
     let accumulatedCost = 0;
@@ -241,7 +241,6 @@ export class OrchestratorAgent {
       message,
       systemPrompt,
       model: planningModel,
-      maxBudgetUsd: 0.1,
       cwd: process.cwd(),
     })) {
       if (event.type === "text" && event.content) {
@@ -309,7 +308,6 @@ export class OrchestratorAgent {
           repoName: q.repoName,
           repoPath: repoInfo.repoPath,
           model: effectiveModel,
-          maxBudgetUsd: 0.5,
           provider: this.provider,
           customPrompt: repoInfo.customPrompt,
         });
@@ -419,7 +417,6 @@ export class OrchestratorAgent {
       message: contextMessage,
       systemPrompt,
       model: reflectionModel,
-      maxBudgetUsd: 0.1,
       cwd: process.cwd(),
     })) {
       if (event.type === "text" && event.content) {
@@ -497,7 +494,7 @@ export class OrchestratorAgent {
       message: contextMessage,
       systemPrompt,
       model: synthesisModel,
-      maxBudgetUsd: this.config.maxBudgetUsd || 2.0,
+      maxBudgetUsd: this.config.maxBudgetUsd,
       cwd: process.cwd(),
       sessionId,
     })) {
