@@ -25,6 +25,7 @@ export interface Repo {
   techStack: string | null;
   teamOwner: string | null;
   profileStatus: ProfileStatus | null;
+  installationId: number | null;
 }
 
 export type ConversationType = "chat" | "analysis";

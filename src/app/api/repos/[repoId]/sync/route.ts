@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { syncRepo } from "@/lib/git/clone";
+import { getInstallationToken } from "@/lib/github/auth";
 
 /** POST /api/repos/[repoId]/sync - Trigger git pull */
 export async function POST(
@@ -34,8 +35,19 @@ export async function POST(
     .where(eq(schema.repos.id, repoId))
     .run();
 
+  // Get auth token if repo has installationId
+  const syncOptions: { githubUrl?: string; authToken?: string } = {};
+  if (repo.installationId) {
+    try {
+      syncOptions.authToken = await getInstallationToken(repo.installationId);
+      syncOptions.githubUrl = repo.githubUrl;
+    } catch {
+      // Fall back to unauthenticated sync
+    }
+  }
+
   // Sync in background
-  syncRepo(repo.localPath)
+  syncRepo(repo.localPath, syncOptions)
     .then(() => {
       db.update(schema.repos)
         .set({

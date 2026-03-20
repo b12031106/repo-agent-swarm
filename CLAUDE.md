@@ -95,6 +95,18 @@ claude --print --output-format stream-json --verbose \
 - `onCancel` callback 在客戶端斷線時觸發，保存已累積的 assistant 文字到 DB
 - Chat API routes 回傳 `text/event-stream`，header 帶 `X-Conversation-Id`
 
+### GitHub App 整合
+
+透過 GitHub App 的 Installation Access Token 認證 clone private repos，並支援從組織瀏覽及批次匯入 repo。
+
+- **環境變數**（可選）：`GITHUB_APP_ID`、`GITHUB_PRIVATE_KEY`（PEM 內容或檔案路徑）
+- **模組**：`src/lib/github/`（`auth.ts` JWT 產生與 token 快取、`api.ts` API 封裝、`types.ts` 型別）
+- **認證流程**：App ID + Private Key → RS256 JWT → Installation Access Token（記憶體快取，過期前 5 分鐘自動刷新）
+- **clone/sync**：有 `installationId` 的 repo 自動用 `x-access-token:{token}@github.com` URL 認證
+- **安全**：帶 token 的 URL 不 log 也不存 DB，`syncRepo` 完成後還原 remote URL
+- **DB**：`repos.installation_id` 記錄關聯的 GitHub App Installation
+- **不需額外 npm 套件**，用 Node.js 內建 `crypto` + `fetch`
+
 ## 關鍵技術限制
 
 - **`--print --output-format stream-json` 必須搭配 `--verbose`**，否則 stdout 無輸出
@@ -124,6 +136,10 @@ claude --print --output-format stream-json --verbose \
 | `/api/upload` | POST | 上傳附件（multipart/form-data） |
 | `/api/settings` | GET/PUT | 全域設定（如 orchestrator 自訂提示） |
 | `/api/usage` | GET | Token 使用統計 |
+| `/api/github/status` | GET | GitHub App 設定狀態（`{ configured: boolean }`） |
+| `/api/github/installations` | GET | 列出已安裝 App 的組織 |
+| `/api/github/installations/[id]/repos` | GET | 列出組織的 repo（標記已匯入） |
+| `/api/github/import` | POST | 批次匯入 repo（body 含 `installationId`, `repos[]`） |
 
 ## 執行時路徑
 

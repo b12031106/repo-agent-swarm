@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback } from "react";
 import { RepoCard } from "./repo-card";
 import { AddRepoForm } from "./add-repo-form";
 import { RepoSettingsDialog } from "./repo-settings-dialog";
+import { ImportFromOrgDialog } from "./import-from-org-dialog";
 import { Button } from "@/components/ui/button";
 import type { Repo } from "@/types";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, Building2 } from "lucide-react";
 
 function notifySidebar() {
   window.dispatchEvent(new CustomEvent("repos-changed"));
@@ -17,6 +18,7 @@ export function RepoList() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [settingsRepoId, setSettingsRepoId] = useState<string | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   const fetchRepos = useCallback(async () => {
     try {
@@ -82,7 +84,19 @@ export function RepoList() {
 
   return (
     <div className="space-y-6">
-      <AddRepoForm onAdded={handleAdded} />
+      <div className="flex items-end gap-2">
+        <div className="flex-1">
+          <AddRepoForm onAdded={handleAdded} />
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => setImportDialogOpen(true)}
+          className="shrink-0"
+        >
+          <Building2 className="mr-1 h-4 w-4" />
+          從組織匯入
+        </Button>
+      </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-8">
@@ -125,6 +139,12 @@ export function RepoList() {
           )}
         </>
       )}
+
+      <ImportFromOrgDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        onImported={() => fetchRepos().then(() => notifySidebar())}
+      />
 
       {settingsRepo && (
         <RepoSettingsDialog

@@ -7,6 +7,7 @@ import {
   extractRepoName,
   getRepoLocalPath,
 } from "@/lib/git/clone";
+import { getInstallationToken } from "@/lib/github/auth";
 
 /** GET /api/repos - List all repos */
 export async function GET() {
@@ -18,7 +19,7 @@ export async function GET() {
 /** POST /api/repos - Register and clone a new repo */
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { githubUrl, name, customPrompt, description, domain, serviceType, techStack, teamOwner } = body;
+  const { githubUrl, name, customPrompt, description, domain, serviceType, techStack, teamOwner, installationId } = body;
 
   if (!githubUrl) {
     return NextResponse.json(
@@ -48,11 +49,25 @@ export async function POST(request: NextRequest) {
       techStack: techStack?.trim() || null,
       teamOwner: teamOwner?.trim() || null,
       profileStatus: description || domain || serviceType ? "draft" : "empty",
+      installationId: installationId ?? null,
     })
     .run();
 
+  // Get auth token if installationId is provided
+  const cloneOptions: { authToken?: string } = {};
+  if (installationId) {
+    try {
+      cloneOptions.authToken = await getInstallationToken(installationId);
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Failed to get installation token" },
+        { status: 500 }
+      );
+    }
+  }
+
   // Start cloning in background
-  cloneRepo(githubUrl, localPath)
+  cloneRepo(githubUrl, localPath, cloneOptions)
     .then(() => {
       db.update(schema.repos)
         .set({

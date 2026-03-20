@@ -7,6 +7,7 @@
 - **單 Repo 對話** — 針對單一程式碼庫進行 AI 問答、程式碼分析
 - **跨 Repo 總顧問 (Orchestrator)** — 跨多個 repo 的架構層級分析，自動分派子 agent
 - **需求分析模式** — 上傳 PRD 文件，AI 進行多輪迭代分析，產出結構化評估
+- **GitHub App 組織匯入** — 透過 GitHub App 瀏覽組織內的 repo 並批次匯入，支援 private repo 認證
 - **服務目錄 (Service Registry)** — 自動掃描 repo 元資料（技術棧、API、依賴關係）
 - **檔案上傳** — 支援圖片、PDF、程式碼檔案作為對話附件
 - **模型切換** — 每個對話可獨立選擇 Sonnet / Haiku / Opus
@@ -37,6 +38,18 @@ pnpm rebuild better-sqlite3
 
 # 開發模式
 pnpm dev
+```
+
+### GitHub App 整合（可選）
+
+若需從組織匯入 private repo，需設定以下環境變數：
+
+```bash
+GITHUB_APP_ID=your-app-id
+# PEM 檔案路徑（推薦）
+GITHUB_PRIVATE_KEY=/path/to/your-app.pem
+# 或直接寫入 PEM 內容
+# GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
 ```
 
 開啟 http://localhost:3000。

@@ -76,6 +76,9 @@ function createDb() {
   // Migration: add type column to conversations
   try { db.run(sql`ALTER TABLE conversations ADD COLUMN type TEXT DEFAULT 'chat'`); } catch { /* exists */ }
 
+  // Migration: add installation_id column to repos
+  try { db.run(sql`ALTER TABLE repos ADD COLUMN installation_id INTEGER`); } catch { /* exists */ }
+
   // Create settings table
   db.run(sql`
     CREATE TABLE IF NOT EXISTS settings (

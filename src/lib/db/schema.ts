@@ -27,6 +27,8 @@ export const repos = sqliteTable("repos", {
   profileStatus: text("profile_status", {
     enum: ["empty", "draft", "confirmed"],
   }).default("empty"),
+  // GitHub App installation
+  installationId: integer("installation_id"),
 });
 
 export const settings = sqliteTable("settings", {
