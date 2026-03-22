@@ -4,8 +4,9 @@ import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { OrchestratorAgent } from "@/lib/agents/orchestrator-agent";
 import { createSSEStream } from "@/lib/streaming/sse-encoder";
-import { buildMessageWithAttachments, buildAttachmentMetadata } from "@/lib/uploads/message-builder";
+import { buildMessageWithAttachments } from "@/lib/uploads/message-builder";
 import { getUploadedFile } from "@/lib/uploads";
+import { masterClaudeMdExists, generateMasterClaudeMd } from "@/lib/claude-md";
 import type { AgentStreamEvent } from "@/types";
 
 /** POST /api/chat/orchestrator - Send a message to the orchestrator */
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
 
   const db = getDb();
 
-  // Get all ready repos
+  // Check that at least one repo exists
   const readyRepos = db
     .select()
     .from(schema.repos)
@@ -37,6 +38,11 @@ export async function POST(request: NextRequest) {
         headers: { "Content-Type": "application/json" },
       }
     );
+  }
+
+  // Ensure master CLAUDE.md exists
+  if (!masterClaudeMdExists()) {
+    await generateMasterClaudeMd(readyRepos);
   }
 
   // Get or create conversation
@@ -78,8 +84,6 @@ export async function POST(request: NextRequest) {
 
   // Build enhanced message with full attachment content
   const enhancedMessage = buildMessageWithAttachments(message, attachmentIds);
-  // Build short metadata for planning phase
-  const messageWithMeta = message + buildAttachmentMetadata(attachmentIds);
 
   // Build attachments metadata for DB storage
   const attachmentsJsonStr = attachmentIds?.length
@@ -113,22 +117,8 @@ export async function POST(request: NextRequest) {
     .where(eq(schema.settings.key, "orchestrator_custom_prompt"))
     .get();
 
-  // Create orchestrator agent with full service registry metadata
+  // Create orchestrator agent (no repos array needed — reads from disk)
   const orchestrator = new OrchestratorAgent({
-    repos: readyRepos.map((r) => ({
-      repoId: r.id,
-      repoName: r.name,
-      repoPath: r.localPath,
-      customPrompt: r.customPrompt,
-      description: r.description,
-      domain: r.domain,
-      serviceType: r.serviceType,
-      dependenciesJson: r.dependenciesJson,
-      exposedApisJson: r.exposedApisJson,
-      techStack: r.techStack,
-      teamOwner: r.teamOwner,
-      profileStatus: r.profileStatus,
-    })),
     customPrompt: orchestratorPromptSetting?.value || null,
   });
 
@@ -138,24 +128,14 @@ export async function POST(request: NextRequest) {
 
   const finalConvId = convId;
 
-  // Track current phase to know when to accumulate text
-  let currentPhase: string | null = null;
-
   async function* streamWithPersistence(): AsyncGenerator<AgentStreamEvent> {
     let fullAssistantText = "";
     let resultSessionId: string | undefined;
-    let totalUsage = { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
+    const totalUsage = { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
 
     for await (const event of orchestrator.query(enhancedMessage, sessionId, effectiveModel)) {
-      // Track phase transitions
-      if (event.type === "phase_start") {
-        currentPhase = event.phase || null;
-      } else if (event.type === "phase_end") {
-        currentPhase = null;
-      }
-
-      // Only accumulate text from synthesis phase (the final response)
-      if (event.type === "text" && event.content && currentPhase === "synthesis") {
+      // Accumulate all text
+      if (event.type === "text" && event.content) {
         fullAssistantText += event.content;
       }
 
@@ -163,22 +143,11 @@ export async function POST(request: NextRequest) {
         resultSessionId = event.sessionId;
       }
 
-      // Accumulate usage from all phases (done events from subagents too)
+      // Accumulate usage from done event
       if (event.type === "done" && event.usage) {
         totalUsage.input_tokens += event.usage.input_tokens;
         totalUsage.output_tokens += event.usage.output_tokens;
         totalUsage.cost_usd += event.usage.cost_usd;
-      }
-
-      // Also accumulate usage from subagent inner events
-      if (
-        event.type === "subagent_event" &&
-        event.innerEvent?.type === "done" &&
-        event.innerEvent.usage
-      ) {
-        totalUsage.input_tokens += event.innerEvent.usage.input_tokens;
-        totalUsage.output_tokens += event.innerEvent.usage.output_tokens;
-        totalUsage.cost_usd += event.innerEvent.usage.cost_usd;
       }
 
       yield { ...event, conversationId: finalConvId } as AgentStreamEvent & {
@@ -223,8 +192,6 @@ export async function POST(request: NextRequest) {
 
   const stream = createSSEStream(streamWithPersistence(), {
     onCancel: (accumulatedText) => {
-      // accumulatedText from SSE encoder includes ALL text events (planning + synthesis)
-      // We only want synthesis text, but on cancel we save whatever we have
       if (accumulatedText) {
         db.insert(schema.messages)
           .values({

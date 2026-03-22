@@ -29,6 +29,8 @@ export const repos = sqliteTable("repos", {
   }).default("empty"),
   // GitHub App installation
   installationId: integer("installation_id"),
+  // Hash of repo's CLAUDE.md (or AGENTS.md / .generated-claude.md) for change detection
+  claudeMdHash: text("claude_md_hash"),
 });
 
 export const settings = sqliteTable("settings", {

@@ -1,6 +1,5 @@
 import {
   DEFAULT_REPO_AGENT_ROLE,
-  DEFAULT_ORCHESTRATOR_ROLE,
 } from "@/lib/constants/default-prompts";
 
 export interface RepoMetaForPrompt {
@@ -18,8 +17,8 @@ export interface RepoMetaForPrompt {
 }
 
 /**
- * Build rich repo descriptions for orchestrator prompts.
- * Shows service registry metadata when available.
+ * Build rich repo descriptions from DB metadata.
+ * Used as fallback when repos don't have CLAUDE.md files.
  */
 export function buildRepoDescriptions(repos: RepoMetaForPrompt[]): string {
   return repos
@@ -99,193 +98,6 @@ Your working directory is: ${repoPath}
   return `${role}\n\n${coreConstraints}`;
 }
 
-export function getOrchestratorSystemPrompt(
-  repoDescriptions: string,
-  customRolePrompt?: string | null
-): string {
-  const role = customRolePrompt?.trim() || DEFAULT_ORCHESTRATOR_ROLE;
-
-  const coreConstraints = `## Available Repositories
-${repoDescriptions}
-
-## Guidelines
-- Identify which repos are relevant to each question.
-- Delegate specific code analysis to the repo agents.
-- Synthesize and summarize findings from multiple agents.
-- Provide your own architectural insights on top of agent findings.
-- Always respond in 繁體中文 (Traditional Chinese, Taiwan usage) unless the user explicitly asks otherwise.`;
-
-  return `${role}\n\n${coreConstraints}`;
-}
-
-export function getOrchestratorPlanningPrompt(
-  repoDescriptions: string,
-  customRolePrompt?: string | null
-): string {
-  const role = customRolePrompt?.trim() || DEFAULT_ORCHESTRATOR_ROLE;
-
-  return `${role}
-
-## Available Repositories
-${repoDescriptions}
-
-## Your Task
-Analyze the user's question and decide which repositories need to be queried. Output a JSON object with the following format and NOTHING else before or after the JSON:
-
-\`\`\`json
-{
-  "reasoning": "Brief explanation of why these repos are relevant",
-  "queries": [
-    {
-      "repoId": "the repo ID",
-      "repoName": "the repo name",
-      "question": "A specific question tailored for this repo's agent"
-    }
-  ]
-}
-\`\`\`
-
-Rules:
-- Use the service metadata (描述, 領域, 類型, 對外 API, 依賴) to make informed decisions about which repos are relevant.
-- Repos marked ✅ 已確認 have more reliable metadata than 📝 草稿 or ⚠️ 無資料.
-- If the question is general chat (greetings, non-code topics), return an empty queries array.
-- If the question involves a specific repo, only query that repo.
-- If the question spans multiple repos or is about cross-repo architecture, query all relevant repos.
-- Tailor each question to be specific and actionable for the repo agent.
-- Always respond in 繁體中文 (Traditional Chinese, Taiwan usage).`;
-}
-
-export interface IterationContext {
-  iteration: number;
-  previousResults: Array<{
-    repoName: string;
-    summary: string;
-  }>;
-  reflectionNote?: string;
-}
-
-/**
- * Build planning prompt with iteration context for multi-round queries.
- */
-export function getIterativePlanningPrompt(
-  repoDescriptions: string,
-  customRolePrompt: string | null | undefined,
-  context: IterationContext
-): string {
-  const base = getOrchestratorPlanningPrompt(repoDescriptions, customRolePrompt);
-
-  if (context.iteration <= 1) return base;
-
-  const prevSummary = context.previousResults
-    .map((r) => `- **${r.repoName}**: ${r.summary}`)
-    .join("\n");
-
-  return `${base}
-
-## Previous Iteration Results (Round ${context.iteration - 1})
-${prevSummary}
-
-${context.reflectionNote ? `## Reflection Note\n${context.reflectionNote}\n` : ""}
-Based on the above findings, identify any ADDITIONAL repos that need to be queried to fully answer the user's question. Do NOT re-query repos that were already queried unless the question needs different information from them.`;
-}
-
-/**
- * Reflection prompt: evaluate if gathered information is sufficient.
- */
-export function getOrchestratorReflectionPrompt(
-  repoDescriptions: string,
-  customRolePrompt?: string | null
-): string {
-  const role = customRolePrompt?.trim() || DEFAULT_ORCHESTRATOR_ROLE;
-
-  return `${role}
-
-## Available Repositories
-${repoDescriptions}
-
-## Your Task
-You are reviewing the analysis results collected so far. Evaluate whether the information is sufficient to fully answer the user's question.
-
-Output a JSON object with the following format and NOTHING else before or after the JSON:
-
-\`\`\`json
-{
-  "assessment": "Brief assessment of information coverage",
-  "sufficient": true/false,
-  "additionalQueries": [
-    {
-      "repoId": "the repo ID",
-      "repoName": "the repo name",
-      "question": "A specific follow-up question",
-      "reason": "Why this additional query is needed"
-    }
-  ]
-}
-\`\`\`
-
-Rules:
-- Set "sufficient" to true if the collected information can answer the user's question comprehensively.
-- Set "sufficient" to false if critical information is missing from repos that haven't been queried.
-- "additionalQueries" should only contain NEW queries (don't re-query already analyzed repos unless asking a different question).
-- Be conservative: only request additional queries when there's a clear gap.
-- Always respond in 繁體中文 (Traditional Chinese, Taiwan usage).`;
-}
-
-/**
- * Synthesis prompt with optional structured output format.
- */
-export function getOrchestratorSynthesisPrompt(
-  repoDescriptions: string,
-  customRolePrompt?: string | null,
-  options?: { structuredOutput?: boolean }
-): string {
-  const role = customRolePrompt?.trim() || DEFAULT_ORCHESTRATOR_ROLE;
-
-  const structuredSection = options?.structuredOutput
-    ? `
-
-## Output Format
-Your response MUST include the following sections in order:
-
-### 1. 摘要
-A concise executive summary (2-3 paragraphs).
-
-### 2. 涉及的服務與團隊
-A markdown table with columns: 服務名稱 | 領域 | 負責團隊 | 影響程度 (高/中/低) | 說明
-
-### 3. 依賴關係圖
-A Mermaid flowchart showing service dependencies relevant to this analysis. Use:
-\`\`\`mermaid
-graph TD
-  A[Service A] --> B[Service B]
-\`\`\`
-
-### 4. 工作項清單
-Organized by team, each item with: priority (P0/P1/P2), description, estimated complexity (S/M/L).
-
-### 5. 影響範圍評估
-Describe the blast radius: which services, APIs, and user flows are affected.
-
-### 6. 風險與建議
-Key risks, mitigation strategies, and implementation recommendations.`
-    : "";
-
-  return `${role}
-
-## Available Repositories
-${repoDescriptions}
-
-## Context
-You have received analysis results from repo-specific agents. Each agent has examined its repository in detail.
-
-## Your Task
-- Synthesize and integrate the findings from all repo agents into a coherent response.
-- Provide high-level architectural insights and cross-repo analysis.
-- Highlight cross-repo dependencies, patterns, or inconsistencies.
-- If any agent reported an error, acknowledge it and work with available data.
-- Always respond in 繁體中文 (Traditional Chinese, Taiwan usage) unless the user explicitly asks otherwise.${structuredSection}`;
-}
-
 /**
  * Repo scanner prompt: analyze a repo's codebase to extract service metadata.
  */
@@ -319,4 +131,73 @@ Examine the codebase and extract the following information. Output a JSON object
 - For "exposedApis", list the main route prefixes (e.g., "/api/users", "/api/products"), not every individual endpoint.
 - For "dependencies", include both internal services and external infrastructure (Redis, PostgreSQL, etc.).
 - Always respond in 繁體中文 for the description field.`;
+}
+
+/**
+ * Direct orchestrator prompt: single CLI invocation from repos parent directory.
+ * Claude Code reads CLAUDE.md in cwd and explores repos as needed.
+ */
+export function getOrchestratorDirectPrompt(
+  customRolePrompt?: string | null,
+  options?: { structuredOutput?: boolean }
+): string {
+  const role = customRolePrompt?.trim() || `You are a senior software architect who oversees multiple code repositories.
+
+## Your Role
+- You analyze code across multiple repositories, find cross-repo dependencies, explain architectures, and provide high-level technical insights.
+- You explore repositories as needed using your tools — reading files, searching code, and running read-only commands.`;
+
+  const structuredSection = options?.structuredOutput
+    ? `
+
+## Output Format
+Your response MUST include the following sections in order:
+
+### 1. 摘要
+A concise executive summary (2-3 paragraphs).
+
+### 2. 涉及的服務與團隊
+A markdown table with columns: 服務名稱 | 領域 | 負責團隊 | 影響程度 (高/中/低) | 說明
+
+### 3. 依賴關係圖
+A Mermaid flowchart showing service dependencies relevant to this analysis. Use:
+\`\`\`mermaid
+graph TD
+  A[Service A] --> B[Service B]
+\`\`\`
+
+### 4. 工作項清單
+Organized by team, each item with: priority (P0/P1/P2), description, estimated complexity (S/M/L).
+
+### 5. 影響範圍評估
+Describe the blast radius: which services, APIs, and user flows are affected.
+
+### 6. 風險與建議
+Key risks, mitigation strategies, and implementation recommendations.`
+    : "";
+
+  return `${role}
+
+## Core Constraints
+
+Your working directory contains multiple code repositories. A \`CLAUDE.md\` file in this directory provides an index of all available repos with brief descriptions.
+
+- **Start by reading \`CLAUDE.md\`** in the current directory to understand what repos are available.
+- Navigate into relevant repo directories as needed to answer the user's question.
+- Each repo may have its own \`CLAUDE.md\` with detailed information — read it when you need deeper context.
+- You are **READ-ONLY**. Do NOT create, edit, delete, or write any files.
+
+## Tool Guidelines
+- Use Glob to find files by pattern across repos (e.g., \`*/src/**/*.ts\`).
+- Use Grep to search for code patterns across all repos (e.g., function definitions, imports, API calls).
+- Use Read to examine file contents.
+- Use Bash ONLY for read-only operations like \`git log\`, \`git diff\`, \`ls\`, \`wc\`, etc.
+- NEVER use Bash for commands that modify files.
+- Always reference specific file paths and line numbers in your answers.
+- When analyzing cross-repo interactions, trace the full call chain across repositories.
+
+## Response Guidelines
+- Always respond in 繁體中文 (Traditional Chinese, Taiwan usage) unless the user explicitly asks otherwise.
+- Provide concrete evidence from the code, not speculation.
+- When discussing cross-repo dependencies, cite the specific files and line numbers in each repo.${structuredSection}`;
 }

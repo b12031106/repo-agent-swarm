@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import fs from "fs";
+import path from "path";
 import { getDb, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { syncRepo } from "@/lib/git/clone";
 import { getInstallationToken } from "@/lib/github/auth";
+import {
+  computeClaudeMdHash,
+  getRepoDescriptionSource,
+  updateMasterClaudeMdForRepo,
+} from "@/lib/claude-md";
 
 /** POST /api/repos/[repoId]/sync - Trigger git pull */
 export async function POST(
@@ -48,7 +55,7 @@ export async function POST(
 
   // Sync in background
   syncRepo(repo.localPath, syncOptions)
-    .then(() => {
+    .then(async () => {
       db.update(schema.repos)
         .set({
           status: "ready",
@@ -56,6 +63,29 @@ export async function POST(
         })
         .where(eq(schema.repos.id, repoId))
         .run();
+
+      // Check if CLAUDE.md (or equivalent) has changed
+      const newHash = computeClaudeMdHash(repo.localPath);
+      if (newHash !== repo.claudeMdHash) {
+        // If a real CLAUDE.md appeared, clean up .generated-claude.md
+        const source = getRepoDescriptionSource(repo.localPath);
+        if (source && source.source !== ".generated-claude.md") {
+          const generatedPath = path.join(repo.localPath, ".generated-claude.md");
+          if (fs.existsSync(generatedPath)) {
+            fs.rmSync(generatedPath, { force: true });
+          }
+        }
+
+        db.update(schema.repos)
+          .set({ claudeMdHash: newHash })
+          .where(eq(schema.repos.id, repoId))
+          .run();
+
+        const allReady = db.select().from(schema.repos).where(eq(schema.repos.status, "ready")).all();
+        updateMasterClaudeMdForRepo(repo, allReady).catch((err) =>
+          console.error("[sync] Failed to update master CLAUDE.md:", err)
+        );
+      }
     })
     .catch((error) => {
       db.update(schema.repos)

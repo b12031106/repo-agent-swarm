@@ -8,6 +8,12 @@ import {
   getRepoLocalPath,
 } from "@/lib/git/clone";
 import { getInstallationToken } from "@/lib/github/auth";
+import {
+  getRepoDescriptionSource,
+  generateRepoClaudeMd,
+  computeClaudeMdHash,
+  debouncedGenerateMasterClaudeMd,
+} from "@/lib/claude-md";
 
 /** GET /api/repos - List all repos */
 export async function GET() {
@@ -68,7 +74,7 @@ export async function POST(request: NextRequest) {
 
   // Start cloning in background
   cloneRepo(githubUrl, localPath, cloneOptions)
-    .then(() => {
+    .then(async () => {
       db.update(schema.repos)
         .set({
           status: "ready",
@@ -76,6 +82,24 @@ export async function POST(request: NextRequest) {
         })
         .where(eq(schema.repos.id, repoId))
         .run();
+
+      // Generate .generated-claude.md if repo has no description file
+      const source = getRepoDescriptionSource(localPath);
+      if (!source) {
+        await generateRepoClaudeMd(localPath, repoName).catch((err) =>
+          console.error("[repos] Failed to generate repo CLAUDE.md:", err)
+        );
+      }
+
+      // Compute and store hash, then update master index
+      const hash = computeClaudeMdHash(localPath);
+      db.update(schema.repos)
+        .set({ claudeMdHash: hash })
+        .where(eq(schema.repos.id, repoId))
+        .run();
+
+      const allReady = db.select().from(schema.repos).where(eq(schema.repos.status, "ready")).all();
+      debouncedGenerateMasterClaudeMd(allReady);
     })
     .catch((error) => {
       db.update(schema.repos)

@@ -79,6 +79,9 @@ function createDb() {
   // Migration: add installation_id column to repos
   try { db.run(sql`ALTER TABLE repos ADD COLUMN installation_id INTEGER`); } catch { /* exists */ }
 
+  // Migration: add claude_md_hash column to repos
+  try { db.run(sql`ALTER TABLE repos ADD COLUMN claude_md_hash TEXT`); } catch { /* exists */ }
+
   // Create settings table
   db.run(sql`
     CREATE TABLE IF NOT EXISTS settings (

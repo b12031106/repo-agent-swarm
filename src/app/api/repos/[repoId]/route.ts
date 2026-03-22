@@ -3,6 +3,7 @@ import { getDb, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { removeRepo } from "@/lib/git/clone";
 import { agentManager } from "@/lib/agents/agent-manager";
+import { removeRepoFromMasterClaudeMd } from "@/lib/claude-md";
 
 /** GET /api/repos/[repoId] - Get a single repo */
 export async function GET(
@@ -100,6 +101,9 @@ export async function DELETE(
   if (!repo) {
     return NextResponse.json({ error: "Repo not found" }, { status: 404 });
   }
+
+  // Remove from master CLAUDE.md index before deleting
+  removeRepoFromMasterClaudeMd(repo.name, repo.localPath);
 
   // Remove from disk
   removeRepo(repo.localPath);

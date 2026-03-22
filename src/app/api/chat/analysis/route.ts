@@ -4,13 +4,14 @@ import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { OrchestratorAgent } from "@/lib/agents/orchestrator-agent";
 import { createSSEStream } from "@/lib/streaming/sse-encoder";
-import { buildMessageWithAttachments, buildAttachmentMetadata } from "@/lib/uploads/message-builder";
+import { buildMessageWithAttachments } from "@/lib/uploads/message-builder";
 import { getUploadedFile } from "@/lib/uploads";
+import { masterClaudeMdExists, generateMasterClaudeMd } from "@/lib/claude-md";
 import type { AgentStreamEvent } from "@/types";
 
 /**
  * POST /api/chat/analysis - Requirement analysis mode
- * Forces structured output, multi-iteration, and stronger models.
+ * Forces structured output and uses stronger model (opus) with higher budget.
  */
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -42,6 +43,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Ensure master CLAUDE.md exists
+  if (!masterClaudeMdExists()) {
+    await generateMasterClaudeMd(readyRepos);
+  }
+
   // Get or create conversation
   let convId = conversationId;
   let sessionId: string | undefined;
@@ -65,7 +71,7 @@ export async function POST(request: NextRequest) {
         repoId: null,
         title: `[分析] ${message.slice(0, 80)}`,
         isOrchestrator: true,
-        model: model || "sonnet",
+        model: model || "opus",
         type: "analysis",
       })
       .run();
@@ -108,27 +114,10 @@ export async function POST(request: NextRequest) {
 
   // Create orchestrator agent with analysis-mode settings
   const orchestrator = new OrchestratorAgent({
-    repos: readyRepos.map((r) => ({
-      repoId: r.id,
-      repoName: r.name,
-      repoPath: r.localPath,
-      customPrompt: r.customPrompt,
-      description: r.description,
-      domain: r.domain,
-      serviceType: r.serviceType,
-      dependenciesJson: r.dependenciesJson,
-      exposedApisJson: r.exposedApisJson,
-      techStack: r.techStack,
-      teamOwner: r.teamOwner,
-      profileStatus: r.profileStatus,
-    })),
     customPrompt: orchestratorPromptSetting?.value || null,
-    // Analysis mode: stronger models and multi-iteration
-    maxIterations: 3,
+    model: model || "opus",
+    maxBudgetUsd: 5.0,
     structuredOutput: true,
-    planningModel: "sonnet",
-    reflectionModel: "sonnet",
-    synthesisModel: "opus",
   });
 
   if (sessionId) {
@@ -136,21 +125,15 @@ export async function POST(request: NextRequest) {
   }
 
   const finalConvId = convId;
-  let currentPhase: string | null = null;
 
   async function* streamWithPersistence(): AsyncGenerator<AgentStreamEvent> {
     let fullAssistantText = "";
     let resultSessionId: string | undefined;
-    let totalUsage = { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
+    const totalUsage = { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
 
-    for await (const event of orchestrator.query(enhancedMessage, sessionId, model || "sonnet")) {
-      if (event.type === "phase_start") {
-        currentPhase = event.phase || null;
-      } else if (event.type === "phase_end") {
-        currentPhase = null;
-      }
-
-      if (event.type === "text" && event.content && currentPhase === "synthesis") {
+    for await (const event of orchestrator.query(enhancedMessage, sessionId, model || "opus")) {
+      // Accumulate all text
+      if (event.type === "text" && event.content) {
         fullAssistantText += event.content;
       }
 
@@ -162,16 +145,6 @@ export async function POST(request: NextRequest) {
         totalUsage.input_tokens += event.usage.input_tokens;
         totalUsage.output_tokens += event.usage.output_tokens;
         totalUsage.cost_usd += event.usage.cost_usd;
-      }
-
-      if (
-        event.type === "subagent_event" &&
-        event.innerEvent?.type === "done" &&
-        event.innerEvent.usage
-      ) {
-        totalUsage.input_tokens += event.innerEvent.usage.input_tokens;
-        totalUsage.output_tokens += event.innerEvent.usage.output_tokens;
-        totalUsage.cost_usd += event.innerEvent.usage.cost_usd;
       }
 
       yield { ...event, conversationId: finalConvId } as AgentStreamEvent & {
