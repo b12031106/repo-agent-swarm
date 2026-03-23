@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Loader2,
   Trash2,
+  Share2,
   MessageSquare,
   Users,
   FileSearch,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { ShareDialog } from "@/components/chat/share-dialog";
 import type { Conversation } from "@/types";
 
 type FilterTab = "all" | "repo" | "orchestrator" | "analysis";
@@ -73,6 +75,7 @@ export default function ConversationsPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [sharingConv, setSharingConv] = useState<Conversation | null>(null);
 
   useEffect(() => {
     fetch("/api/conversations")
@@ -190,21 +193,42 @@ export default function ConversationsPage() {
                     </span>
                   </div>
                 </div>
-                <button
-                  onClick={(e) => handleDelete(e, conv.id)}
-                  className="shrink-0 p-1.5 rounded opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
-                  title="刪除對話"
-                >
-                  {deletingId === conv.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-3.5 w-3.5" />
-                  )}
-                </button>
+                <div className="shrink-0 flex items-center gap-1">
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSharingConv(conv);
+                    }}
+                    className="p-1.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent hover:text-foreground transition-all"
+                    title="分享對話"
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => handleDelete(e, conv.id)}
+                    className="p-1.5 rounded opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
+                    title="刪除對話"
+                  >
+                    {deletingId === conv.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
               </Link>
             );
           })}
         </div>
+      )}
+      {sharingConv && (
+        <ShareDialog
+          conversationId={sharingConv.id}
+          conversationTitle={sharingConv.title}
+          open={true}
+          onClose={() => setSharingConv(null)}
+        />
       )}
     </div>
   );
