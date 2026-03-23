@@ -11,6 +11,7 @@ import {
   computeClaudeMdHash,
   debouncedGenerateMasterClaudeMd,
 } from "@/lib/claude-md";
+import { getRequiredUser } from "@/lib/auth/get-user";
 
 interface ImportRepoItem {
   name: string;
@@ -18,6 +19,7 @@ interface ImportRepoItem {
 }
 
 export async function POST(request: NextRequest) {
+  await getRequiredUser();
   if (!isConfigured()) {
     return NextResponse.json(
       { error: "GitHub App not configured" },

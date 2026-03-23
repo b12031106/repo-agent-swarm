@@ -4,12 +4,14 @@ import { eq } from "drizzle-orm";
 import { scanRepo, type ScanResult } from "@/lib/agents/repo-scanner";
 import { createSSEStream } from "@/lib/streaming/sse-encoder";
 import type { AgentStreamEvent } from "@/types";
+import { getRequiredUser } from "@/lib/auth/get-user";
 
 /** POST /api/repos/[repoId]/scan - Trigger auto-scan for service metadata */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ repoId: string }> }
 ) {
+  await getRequiredUser();
   const { repoId } = await params;
   const db = getDb();
 

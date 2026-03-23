@@ -4,12 +4,14 @@ import { eq } from "drizzle-orm";
 import { removeRepo } from "@/lib/git/clone";
 import { agentManager } from "@/lib/agents/agent-manager";
 import { removeRepoFromMasterClaudeMd } from "@/lib/claude-md";
+import { getRequiredUser } from "@/lib/auth/get-user";
 
 /** GET /api/repos/[repoId] - Get a single repo */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ repoId: string }> }
 ) {
+  await getRequiredUser();
   const { repoId } = await params;
   const db = getDb();
   const repo = db
@@ -30,6 +32,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ repoId: string }> }
 ) {
+  await getRequiredUser();
   const { repoId } = await params;
   const body = await request.json();
   const {
@@ -89,6 +92,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ repoId: string }> }
 ) {
+  await getRequiredUser();
   const { repoId } = await params;
   const db = getDb();
 

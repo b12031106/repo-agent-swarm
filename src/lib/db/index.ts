@@ -13,6 +13,7 @@ function createDb() {
   const sqlite = new Database(DB_PATH);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
+  sqlite.pragma("auto_vacuum = INCREMENTAL");
 
   const db = drizzle(sqlite, { schema });
 
@@ -81,6 +82,64 @@ function createDb() {
 
   // Migration: add claude_md_hash column to repos
   try { db.run(sql`ALTER TABLE repos ADD COLUMN claude_md_hash TEXT`); } catch { /* exists */ }
+
+  // Auth tables
+  db.run(sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      email TEXT NOT NULL UNIQUE,
+      email_verified INTEGER,
+      image TEXT,
+      created_at TEXT NOT NULL
+    )
+  `);
+
+  db.run(sql`
+    CREATE TABLE IF NOT EXISTS accounts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      provider_account_id TEXT NOT NULL,
+      refresh_token TEXT,
+      access_token TEXT,
+      expires_at INTEGER,
+      token_type TEXT,
+      scope TEXT,
+      id_token TEXT
+    )
+  `);
+
+  db.run(sql`
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      id TEXT PRIMARY KEY,
+      session_token TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires TEXT NOT NULL
+    )
+  `);
+
+  // Migration: add user_id to conversations
+  try { db.run(sql`ALTER TABLE conversations ADD COLUMN user_id TEXT`); } catch { /* exists */ }
+
+  // Migration: add user_id to usage_records
+  try { db.run(sql`ALTER TABLE usage_records ADD COLUMN user_id TEXT`); } catch { /* exists */ }
+
+  // Shares table
+  db.run(sql`
+    CREATE TABLE IF NOT EXISTS shares (
+      id TEXT PRIMARY KEY,
+      token TEXT NOT NULL UNIQUE,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      message_ids TEXT,
+      title TEXT,
+      expires_at TEXT,
+      view_count INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    )
+  `);
 
   // Create settings table
   db.run(sql`

@@ -5,9 +5,11 @@ import {
   cleanupExpiredUploads,
 } from "@/lib/uploads";
 import type { UploadedAttachment } from "@/types";
+import { getRequiredUser } from "@/lib/auth/get-user";
 
 /** POST /api/upload - Upload files (multipart/form-data) */
 export async function POST(request: NextRequest) {
+  await getRequiredUser();
   try {
     // Cleanup expired uploads in background
     cleanupExpiredUploads();

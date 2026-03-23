@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { getDb, schema } from "@/lib/db";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
+import { getRequiredUser } from "@/lib/auth/get-user";
 
 /** GET /api/usage - Get aggregated usage stats */
 export async function GET() {
+  const user = await getRequiredUser();
   const db = getDb();
 
   const stats = db
@@ -14,11 +16,13 @@ export async function GET() {
       totalQueries: sql<number>`COUNT(*)`,
     })
     .from(schema.usageRecords)
+    .where(eq(schema.usageRecords.userId, user.id))
     .get();
 
   const recentUsage = db
     .select()
     .from(schema.usageRecords)
+    .where(eq(schema.usageRecords.userId, user.id))
     .orderBy(sql`${schema.usageRecords.createdAt} DESC`)
     .limit(50)
     .all();

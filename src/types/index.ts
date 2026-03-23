@@ -38,6 +38,7 @@ export interface Conversation {
   isOrchestrator: boolean;
   model: string | null;
   type: ConversationType | null;
+  userId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -56,10 +57,30 @@ export interface Message {
 export interface UsageRecord {
   id: string;
   conversationId: string;
+  userId: string | null;
   inputTokens: number;
   outputTokens: number;
   totalCostUsd: number;
   createdAt: string;
+}
+
+export interface Share {
+  id: string;
+  token: string;
+  conversationId: string;
+  userId: string;
+  messageIds: string | null;
+  title: string | null;
+  expiresAt: string | null;
+  viewCount: number;
+  createdAt: string;
+}
+
+export interface AuthUser {
+  id: string;
+  name: string | null;
+  email: string;
+  image: string | null;
 }
 
 // SSE event types

@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, schema } from "@/lib/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { getRequiredUser } from "@/lib/auth/get-user";
 
 /** DELETE /api/conversations/[conversationId] */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ conversationId: string }> }
 ) {
+  const user = await getRequiredUser();
   const { conversationId } = await params;
   const db = getDb();
 
   const conv = db
     .select()
     .from(schema.conversations)
-    .where(eq(schema.conversations.id, conversationId))
+    .where(and(eq(schema.conversations.id, conversationId), eq(schema.conversations.userId, user.id)))
     .get();
 
   if (!conv) {

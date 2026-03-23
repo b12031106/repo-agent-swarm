@@ -7,6 +7,7 @@ import { ModelSelector } from "./model-selector";
 import { MessageBubble } from "./message-bubble";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertCircle, Loader2, RotateCcw } from "lucide-react";
+import { ShareButton } from "./share-button";
 
 interface ChatContainerProps {
   endpoint: string;
@@ -57,7 +58,13 @@ export function ChatContainer({
       {/* Header */}
       {title && (
         <div className="flex items-center gap-2 border-b px-4 py-3">
-          <h2 className="font-semibold">{title}</h2>
+          <h2 className="font-semibold flex-1">{title}</h2>
+          {conversationId && (
+            <ShareButton
+              conversationId={conversationId}
+              conversationTitle={title}
+            />
+          )}
         </div>
       )}
 

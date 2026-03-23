@@ -7,10 +7,12 @@ import { createSSEStream } from "@/lib/streaming/sse-encoder";
 import { buildMessageWithAttachments } from "@/lib/uploads/message-builder";
 import { getUploadedFile } from "@/lib/uploads";
 import { masterClaudeMdExists, generateMasterClaudeMd } from "@/lib/claude-md";
+import { getRequiredUser } from "@/lib/auth/get-user";
 import type { AgentStreamEvent } from "@/types";
 
 /** POST /api/chat/orchestrator - Send a message to the orchestrator */
 export async function POST(request: NextRequest) {
+  const user = await getRequiredUser();
   const body = await request.json();
   const { message, conversationId, model, attachmentIds } = body;
 
@@ -73,6 +75,7 @@ export async function POST(request: NextRequest) {
         title: message.slice(0, 100),
         isOrchestrator: true,
         model: effectiveModel,
+        userId: user.id,
       })
       .run();
   } else if (model && model !== convModel) {
@@ -161,6 +164,7 @@ export async function POST(request: NextRequest) {
         .values({
           id: uuidv4(),
           conversationId: finalConvId,
+          userId: user.id,
           inputTokens: totalUsage.input_tokens,
           outputTokens: totalUsage.output_tokens,
           totalCostUsd: totalUsage.cost_usd,

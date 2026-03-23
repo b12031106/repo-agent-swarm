@@ -1,5 +1,42 @@
 import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 
+// Auth tables (NextAuth v5)
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  email: text("email").notNull().unique(),
+  emailVerified: integer("email_verified"),
+  image: text("image"),
+  createdAt: text("created_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
+
+export const accounts = sqliteTable("accounts", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  provider: text("provider").notNull(),
+  providerAccountId: text("provider_account_id").notNull(),
+  refreshToken: text("refresh_token"),
+  accessToken: text("access_token"),
+  expiresAt: integer("expires_at"),
+  tokenType: text("token_type"),
+  scope: text("scope"),
+  idToken: text("id_token"),
+});
+
+export const authSessions = sqliteTable("auth_sessions", {
+  id: text("id").primaryKey(),
+  sessionToken: text("session_token").notNull().unique(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  expires: text("expires").notNull(),
+});
+
 export const repos = sqliteTable("repos", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -55,6 +92,7 @@ export const conversations = sqliteTable("conversations", {
   type: text("type", {
     enum: ["chat", "analysis"],
   }).default("chat"),
+  userId: text("user_id"),
   createdAt: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
@@ -88,9 +126,29 @@ export const usageRecords = sqliteTable("usage_records", {
   conversationId: text("conversation_id")
     .notNull()
     .references(() => conversations.id, { onDelete: "cascade" }),
+  userId: text("user_id"),
   inputTokens: integer("input_tokens").notNull().default(0),
   outputTokens: integer("output_tokens").notNull().default(0),
   totalCostUsd: real("total_cost_usd").notNull().default(0),
+  createdAt: text("created_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
+
+// Shares table for conversation sharing
+export const shares = sqliteTable("shares", {
+  id: text("id").primaryKey(),
+  token: text("token").notNull().unique(),
+  conversationId: text("conversation_id")
+    .notNull()
+    .references(() => conversations.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  messageIds: text("message_ids"), // JSON string: ["msg-id-1", "msg-id-2"] or null for entire conversation
+  title: text("title"),
+  expiresAt: text("expires_at"),
+  viewCount: integer("view_count").notNull().default(0),
   createdAt: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),

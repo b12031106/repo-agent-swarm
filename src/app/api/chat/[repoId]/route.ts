@@ -6,6 +6,7 @@ import { agentManager } from "@/lib/agents/agent-manager";
 import { createSSEStream } from "@/lib/streaming/sse-encoder";
 import { buildMessageWithAttachments } from "@/lib/uploads/message-builder";
 import { getUploadedFile } from "@/lib/uploads";
+import { getRequiredUser } from "@/lib/auth/get-user";
 import type { AgentStreamEvent } from "@/types";
 
 /** POST /api/chat/[repoId] - Send a message and get SSE stream response */
@@ -13,6 +14,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ repoId: string }> }
 ) {
+  const user = await getRequiredUser();
   const { repoId } = await params;
   const body = await request.json();
   const { message, conversationId, model, attachmentIds } = body;
@@ -76,6 +78,7 @@ export async function POST(
         title: message.slice(0, 100),
         isOrchestrator: false,
         model: effectiveModel,
+        userId: user.id,
       })
       .run();
   } else if (model && model !== convModel) {
@@ -147,6 +150,7 @@ export async function POST(
           .values({
             id: uuidv4(),
             conversationId: finalConvId,
+            userId: user.id,
             inputTokens: event.usage.input_tokens,
             outputTokens: event.usage.output_tokens,
             totalCostUsd: event.usage.cost_usd,

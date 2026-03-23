@@ -7,6 +7,7 @@ import { createSSEStream } from "@/lib/streaming/sse-encoder";
 import { buildMessageWithAttachments } from "@/lib/uploads/message-builder";
 import { getUploadedFile } from "@/lib/uploads";
 import { masterClaudeMdExists, generateMasterClaudeMd } from "@/lib/claude-md";
+import { getRequiredUser } from "@/lib/auth/get-user";
 import type { AgentStreamEvent } from "@/types";
 
 /**
@@ -14,6 +15,7 @@ import type { AgentStreamEvent } from "@/types";
  * Forces structured output and uses stronger model (opus) with higher budget.
  */
 export async function POST(request: NextRequest) {
+  const user = await getRequiredUser();
   const body = await request.json();
   const { message, conversationId, model, attachmentIds } = body;
 
@@ -73,6 +75,7 @@ export async function POST(request: NextRequest) {
         isOrchestrator: true,
         model: model || "opus",
         type: "analysis",
+        userId: user.id,
       })
       .run();
   }
@@ -157,6 +160,7 @@ export async function POST(request: NextRequest) {
         .values({
           id: uuidv4(),
           conversationId: finalConvId,
+          userId: user.id,
           inputTokens: totalUsage.input_tokens,
           outputTokens: totalUsage.output_tokens,
           totalCostUsd: totalUsage.cost_usd,

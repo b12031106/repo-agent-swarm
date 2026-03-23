@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { FontSizeToggle } from "@/components/font-size-toggle";
+import { UserMenu } from "@/components/auth/user-menu";
 import type { Repo } from "@/types";
 
 export function Sidebar() {
@@ -107,6 +108,9 @@ export function Sidebar() {
         <ThemeToggle />
         <FontSizeToggle />
       </div>
+
+      {/* User menu */}
+      <UserMenu />
     </aside>
   );
 }

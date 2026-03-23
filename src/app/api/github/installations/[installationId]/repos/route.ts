@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isConfigured, listInstallationRepos } from "@/lib/github/api";
 import { getDb, schema } from "@/lib/db";
+import { getRequiredUser } from "@/lib/auth/get-user";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ installationId: string }> }
 ) {
+  await getRequiredUser();
   if (!isConfigured()) {
     return NextResponse.json(
       { error: "GitHub App not configured" },
