@@ -77,6 +77,12 @@ export const messages = sqliteTable("messages", {
     .$defaultFn(() => new Date().toISOString()),
 });
 
+export const cache = sqliteTable("cache", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+});
+
 export const usageRecords = sqliteTable("usage_records", {
   id: text("id").primaryKey(),
   conversationId: text("conversation_id")

@@ -32,7 +32,7 @@ export default function RootLayout({
         <ThemeProvider>
           <div className="flex h-screen">
             <Sidebar />
-            <main className="flex-1 overflow-hidden">{children}</main>
+            <main className="flex-1 min-w-0 overflow-hidden">{children}</main>
           </div>
         </ThemeProvider>
       </body>

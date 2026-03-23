@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef, useDeferredValue, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,8 +11,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Building2, Check, AlertCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, Building2, Check, AlertCircle, Search, RefreshCw } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 interface Installation {
   id: number;
@@ -52,6 +53,10 @@ export function ImportFromOrgDialog({
   const [loadingRepos, setLoadingRepos] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filterText, setFilterText] = useState("");
+  const deferredFilter = useDeferredValue(filterText);
+
+  const scrollParentRef = useRef<HTMLDivElement>(null);
 
   // Check configuration status on open
   useEffect(() => {
@@ -82,14 +87,13 @@ export function ImportFromOrgDialog({
       });
   }, [open]);
 
-  // Load repos when installation selected
-  useEffect(() => {
-    if (!selectedInstallation) return;
+  const fetchRepos = useCallback((installationId: number) => {
     setLoadingRepos(true);
     setRepos([]);
     setSelectedRepos(new Set());
+    setFilterText("");
     setError(null);
-    fetch(`/api/github/installations/${selectedInstallation}/repos`)
+    fetch(`/api/github/installations/${installationId}/repos`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) {
@@ -100,7 +104,29 @@ export function ImportFromOrgDialog({
       })
       .catch(() => setError("無法取得 Repository 列表"))
       .finally(() => setLoadingRepos(false));
-  }, [selectedInstallation]);
+  }, []);
+
+  // Load repos when installation selected
+  useEffect(() => {
+    if (!selectedInstallation) return;
+    fetchRepos(selectedInstallation);
+  }, [selectedInstallation, fetchRepos]);
+
+  const handleRefreshRepos = async () => {
+    if (!selectedInstallation) return;
+    setLoadingRepos(true);
+    setError(null);
+    try {
+      await fetch(
+        `/api/github/installations/${selectedInstallation}/repos/cache`,
+        { method: "DELETE" }
+      );
+      fetchRepos(selectedInstallation);
+    } catch {
+      setError("清除快取失敗");
+      setLoadingRepos(false);
+    }
+  };
 
   const toggleRepo = (id: number) => {
     setSelectedRepos((prev) => {
@@ -158,6 +184,24 @@ export function ImportFromOrgDialog({
     onOpenChange(open);
   };
 
+  const filteredRepos = useMemo(() => {
+    if (!deferredFilter) return repos;
+    const q = deferredFilter.toLowerCase();
+    return repos.filter(
+      (repo) =>
+        repo.name.toLowerCase().includes(q) ||
+        (repo.description?.toLowerCase().includes(q) ?? false) ||
+        (repo.language?.toLowerCase().includes(q) ?? false)
+    );
+  }, [repos, deferredFilter]);
+
+  const virtualizer = useVirtualizer({
+    count: filteredRepos.length,
+    getScrollElement: () => scrollParentRef.current,
+    estimateSize: () => 44,
+    overscan: 10,
+  });
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl">
@@ -214,15 +258,35 @@ export function ImportFromOrgDialog({
 
             {/* Repos list */}
             {selectedInstallation && (
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">
-                  選擇 Repository
-                  {selectedRepos.size > 0 && (
-                    <span className="ml-1 text-muted-foreground">
-                      （已選 {selectedRepos.size} 個）
-                    </span>
-                  )}
-                </label>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-medium">
+                    選擇 Repository
+                    {selectedRepos.size > 0 && (
+                      <span className="ml-1 text-muted-foreground">
+                        （已選 {selectedRepos.size} 個）
+                      </span>
+                    )}
+                    {repos.length > 0 && (
+                      <span className="ml-1 text-muted-foreground">
+                        — 共 {repos.length} 個
+                        {filteredRepos.length !== repos.length && `，顯示 ${filteredRepos.length} 個`}
+                      </span>
+                    )}
+                  </label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRefreshRepos}
+                    disabled={loadingRepos}
+                    title="清除快取並重新抓取"
+                  >
+                    <RefreshCw
+                      className={`mr-1 h-3 w-3 ${loadingRepos ? "animate-spin" : ""}`}
+                    />
+                    重新抓取
+                  </Button>
+                </div>
                 {loadingRepos ? (
                   <div className="flex items-center justify-center py-6">
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -230,54 +294,82 @@ export function ImportFromOrgDialog({
                 ) : repos.length === 0 ? (
                   <p className="text-sm text-muted-foreground">此組織沒有可存取的 Repository</p>
                 ) : (
-                  <ScrollArea className="h-[300px] rounded-md border">
-                    <div className="divide-y">
-                      {repos.map((repo) => (
-                        <label
-                          key={repo.id}
-                          className={`flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/50 ${
-                            repo.imported ? "cursor-default opacity-50" : ""
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-gray-300"
-                            checked={selectedRepos.has(repo.id)}
-                            disabled={repo.imported}
-                            onChange={() => toggleRepo(repo.id)}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="truncate text-sm font-medium">
-                                {repo.name}
-                              </span>
-                              {repo.private && (
-                                <Badge variant="outline" className="text-xs">
-                                  Private
-                                </Badge>
-                              )}
-                              {repo.imported && (
-                                <Badge variant="secondary" className="text-xs">
-                                  <Check className="mr-0.5 h-3 w-3" />
-                                  已匯入
-                                </Badge>
-                              )}
-                              {repo.language && (
-                                <span className="text-xs text-muted-foreground">
-                                  {repo.language}
-                                </span>
-                              )}
-                            </div>
-                            {repo.description && (
-                              <p className="truncate text-xs text-muted-foreground">
-                                {repo.description}
-                              </p>
-                            )}
-                          </div>
-                        </label>
-                      ))}
+                  <>
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="搜尋 Repository…"
+                        value={filterText}
+                        onChange={(e) => setFilterText(e.target.value)}
+                        className="pl-8"
+                      />
                     </div>
-                  </ScrollArea>
+                    <div
+                      ref={scrollParentRef}
+                      className="h-[300px] overflow-auto rounded-md border"
+                    >
+                      <div
+                        style={{
+                          height: `${virtualizer.getTotalSize()}px`,
+                          width: "100%",
+                          position: "relative",
+                        }}
+                      >
+                        {virtualizer.getVirtualItems().map((virtualRow) => {
+                          const repo = filteredRepos[virtualRow.index];
+                          return (
+                            <label
+                              key={repo.id}
+                              data-index={virtualRow.index}
+                              ref={virtualizer.measureElement}
+                              className={`absolute left-0 top-0 flex w-full cursor-pointer items-center gap-3 border-b px-3 py-2.5 transition-colors hover:bg-muted/50 ${
+                                repo.imported ? "cursor-default opacity-50" : ""
+                              }`}
+                              style={{
+                                transform: `translateY(${virtualRow.start}px)`,
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 shrink-0 rounded border-gray-300"
+                                checked={selectedRepos.has(repo.id)}
+                                disabled={repo.imported}
+                                onChange={() => toggleRepo(repo.id)}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="truncate text-sm font-medium">
+                                    {repo.name}
+                                  </span>
+                                  {repo.private && (
+                                    <Badge variant="outline" className="shrink-0 text-xs">
+                                      Private
+                                    </Badge>
+                                  )}
+                                  {repo.imported && (
+                                    <Badge variant="secondary" className="shrink-0 text-xs">
+                                      <Check className="mr-0.5 h-3 w-3" />
+                                      已匯入
+                                    </Badge>
+                                  )}
+                                  {repo.language && (
+                                    <span className="shrink-0 text-xs text-muted-foreground">
+                                      {repo.language}
+                                    </span>
+                                  )}
+                                </div>
+                                {repo.description && (
+                                  <p className="truncate text-xs text-muted-foreground">
+                                    {repo.description}
+                                  </p>
+                                )}
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             )}

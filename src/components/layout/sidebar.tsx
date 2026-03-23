@@ -11,6 +11,7 @@ import {
   MessageSquare,
   ChevronRight,
   FileSearch,
+  Settings,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { FontSizeToggle } from "@/components/font-size-toggle";
@@ -95,8 +96,14 @@ export function Sidebar() {
         )}
       </nav>
 
-      {/* Theme toggle */}
+      {/* Bottom nav */}
       <div className="border-t p-2 space-y-1">
+        <NavItem
+          href="/settings"
+          icon={Settings}
+          label="系統設定"
+          active={pathname === "/settings"}
+        />
         <ThemeToggle />
         <FontSizeToggle />
       </div>

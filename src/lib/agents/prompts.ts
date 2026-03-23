@@ -60,7 +60,7 @@ export function buildRepoDescriptions(repos: RepoMetaForPrompt[]): string {
 
       // Fallback if no metadata at all
       if (!r.description && !r.domain && !r.serviceType) {
-        desc += `\n- 路徑: ${r.repoPath}`;
+        desc += `\n- 尚未掃描，請先執行自動掃描以取得服務元資料`;
       }
 
       return desc;

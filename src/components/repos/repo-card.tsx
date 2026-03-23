@@ -54,13 +54,13 @@ export function RepoCard({ repo, onSync, onDelete, onSettings }: RepoCardProps) 
   const StatusIcon = status.icon;
 
   return (
-    <div className="rounded-lg border bg-card p-4 shadow-sm">
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2">
-          <GitBranch className="h-5 w-5 text-muted-foreground" />
-          <h3 className="font-semibold">{repo.name}</h3>
+    <div className="overflow-hidden rounded-lg border bg-card p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <GitBranch className="h-5 w-5 shrink-0 text-muted-foreground" />
+          <h3 className="truncate font-semibold">{repo.name}</h3>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
           {repo.customPrompt && (
             <Badge variant="outline" className="text-[10px] px-1.5 py-0">
               自訂 Prompt
@@ -89,7 +89,7 @@ export function RepoCard({ repo, onSync, onDelete, onSettings }: RepoCardProps) 
         <p className="mt-1 text-xs text-destructive">{repo.errorMessage}</p>
       )}
 
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         {repo.status === "ready" && (
           <>
             <Link href={`/repos/${repo.id}`}>

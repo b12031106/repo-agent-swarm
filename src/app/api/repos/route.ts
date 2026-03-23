@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
 
   const repoId = uuidv4();
   const repoName = name || extractRepoName(githubUrl);
-  const localPath = getRepoLocalPath(repoId, repoName);
+  const localPath = getRepoLocalPath(githubUrl);
 
   const db = getDb();
 

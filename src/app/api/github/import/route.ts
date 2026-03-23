@@ -5,6 +5,12 @@ import { getDb, schema } from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
 import { cloneRepo, extractRepoName, getRepoLocalPath } from "@/lib/git/clone";
+import {
+  getRepoDescriptionSource,
+  generateRepoClaudeMd,
+  computeClaudeMdHash,
+  debouncedGenerateMasterClaudeMd,
+} from "@/lib/claude-md";
 
 interface ImportRepoItem {
   name: string;
@@ -48,7 +54,7 @@ export async function POST(request: NextRequest) {
   for (const repo of repos) {
     const repoId = uuidv4();
     const repoName = repo.name || extractRepoName(repo.githubUrl);
-    const localPath = getRepoLocalPath(repoId, repoName);
+    const localPath = getRepoLocalPath(repo.githubUrl);
 
     db.insert(schema.repos)
       .values({
@@ -63,11 +69,30 @@ export async function POST(request: NextRequest) {
 
     // Clone in background with auth token
     cloneRepo(repo.githubUrl, localPath, { authToken: token })
-      .then(() => {
+      .then(async () => {
         db.update(schema.repos)
           .set({ status: "ready", lastSyncedAt: new Date().toISOString() })
           .where(eq(schema.repos.id, repoId))
           .run();
+
+        // Generate .generated-claude.md if repo has no description file
+        const source = getRepoDescriptionSource(localPath);
+        if (!source) {
+          await generateRepoClaudeMd(localPath, repoName).catch((err) =>
+            console.error("[github-import] Failed to generate repo CLAUDE.md:", err)
+          );
+        }
+
+        // Compute and store hash
+        const hash = computeClaudeMdHash(localPath);
+        db.update(schema.repos)
+          .set({ claudeMdHash: hash })
+          .where(eq(schema.repos.id, repoId))
+          .run();
+
+        // Update master index
+        const allReady = db.select().from(schema.repos).where(eq(schema.repos.status, "ready")).all();
+        debouncedGenerateMasterClaudeMd(allReady);
       })
       .catch((error) => {
         db.update(schema.repos)

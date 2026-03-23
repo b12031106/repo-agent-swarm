@@ -17,9 +17,16 @@ export function extractRepoName(githubUrl: string): string {
   return parts[parts.length - 1] || "unknown-repo";
 }
 
-/** Get local path for a repo */
-export function getRepoLocalPath(repoId: string, repoName: string): string {
-  return path.join(REPOS_DIR, `${repoName}-${repoId.slice(0, 8)}`);
+/** Get local path for a repo, using the original name from the GitHub URL */
+export function getRepoLocalPath(githubUrl: string): string {
+  const repoName = extractRepoName(githubUrl);
+  const basePath = path.join(REPOS_DIR, repoName);
+
+  // 同名衝突時加數字後綴
+  if (!fs.existsSync(basePath)) return basePath;
+  let i = 2;
+  while (fs.existsSync(`${basePath}-${i}`)) i++;
+  return `${basePath}-${i}`;
 }
 
 /** Build an authenticated clone URL by injecting token credentials */

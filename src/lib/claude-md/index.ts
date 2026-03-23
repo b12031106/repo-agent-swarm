@@ -155,9 +155,10 @@ async function summarizeRepoContent(repoName: string, content: string): Promise<
   try {
     for await (const event of provider.query({
       message: `Summarize the following repository documentation for "${repoName}" into 3-5 lines. Include: purpose, tech stack, key APIs, and dependencies. Write in Traditional Chinese (Taiwan usage). Output raw text only, no markdown headers or code blocks.\n\n---\n${content.slice(0, 8000)}\n---`,
-      systemPrompt: "You are a technical writer. Produce concise summaries. Output only the summary text, nothing else.",
+      systemPrompt: "You are a technical writer. Produce a concise 3-5 line summary in plain text.\nRules:\n- Output ONLY the summary text, nothing else\n- Do NOT include greetings, questions, thoughts, or explanations\n- Do NOT say you cannot complete the task — summarize whatever information is available\n- If the content is insufficient, output a one-line description based on the repo name",
       model: "haiku",
-      cwd: process.cwd(),
+      tools: "",
+      cwd: REPOS_DIR,
     })) {
       if (event.type === "text" && event.content) {
         summary += event.content;

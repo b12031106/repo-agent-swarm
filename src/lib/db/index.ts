@@ -113,6 +113,15 @@ function createDb() {
     )
   `);
 
+  // Create cache table
+  db.run(sql`
+    CREATE TABLE IF NOT EXISTS cache (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      expires_at INTEGER NOT NULL
+    )
+  `);
+
   return db;
 }
 

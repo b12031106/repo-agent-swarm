@@ -23,7 +23,7 @@ export class ClaudeCodeProvider implements AgentProvider {
       args.push("--max-budget-usd", String(options.maxBudgetUsd));
     }
 
-    if (options.tools) {
+    if (options.tools !== undefined) {
       args.push("--tools", options.tools);
     }
 
