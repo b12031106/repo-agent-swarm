@@ -11,6 +11,7 @@ import {
   MessageSquare,
   ChevronRight,
   FileSearch,
+  MessagesSquare,
   Settings,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -76,6 +77,12 @@ export function Sidebar() {
           icon={FileSearch}
           label="需求分析"
           active={pathname === "/analysis"}
+        />
+        <NavItem
+          href="/conversations"
+          icon={MessagesSquare}
+          label="對話紀錄"
+          active={pathname === "/conversations"}
         />
 
         {/* Repo list */}

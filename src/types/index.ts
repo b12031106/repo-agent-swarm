@@ -41,6 +41,7 @@ export interface Conversation {
   userId: string | null;
   createdAt: string;
   updatedAt: string;
+  repoName?: string | null;
 }
 
 export type MessageRole = "user" | "assistant" | "tool";

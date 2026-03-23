@@ -12,20 +12,37 @@ export async function GET(request: NextRequest) {
 
   const db = getDb();
 
+  const baseQuery = db
+    .select({
+      id: schema.conversations.id,
+      repoId: schema.conversations.repoId,
+      sessionId: schema.conversations.sessionId,
+      title: schema.conversations.title,
+      isOrchestrator: schema.conversations.isOrchestrator,
+      model: schema.conversations.model,
+      type: schema.conversations.type,
+      userId: schema.conversations.userId,
+      createdAt: schema.conversations.createdAt,
+      updatedAt: schema.conversations.updatedAt,
+      repoName: schema.repos.name,
+    })
+    .from(schema.conversations)
+    .leftJoin(schema.repos, eq(schema.conversations.repoId, schema.repos.id));
+
   let conversations;
 
   if (repoId) {
-    conversations = db.select().from(schema.conversations)
+    conversations = baseQuery
       .where(and(eq(schema.conversations.repoId, repoId), eq(schema.conversations.userId, user.id)))
       .orderBy(desc(schema.conversations.updatedAt))
       .all();
   } else if (type) {
-    conversations = db.select().from(schema.conversations)
+    conversations = baseQuery
       .where(and(eq(schema.conversations.type, type as "chat" | "analysis"), eq(schema.conversations.userId, user.id)))
       .orderBy(desc(schema.conversations.updatedAt))
       .all();
   } else {
-    conversations = db.select().from(schema.conversations)
+    conversations = baseQuery
       .where(eq(schema.conversations.userId, user.id))
       .orderBy(desc(schema.conversations.updatedAt))
       .all();
