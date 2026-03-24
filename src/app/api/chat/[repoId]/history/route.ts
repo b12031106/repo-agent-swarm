@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, schema } from "@/lib/db";
 import { eq, desc, and } from "drizzle-orm";
-import { getRequiredUser } from "@/lib/auth/get-user";
+import { getRequiredUser, isAuthError } from "@/lib/auth/get-user";
 
 /** GET /api/chat/[repoId]/history - Get conversation history */
 export async function GET(
@@ -9,6 +9,7 @@ export async function GET(
   { params }: { params: Promise<{ repoId: string }> }
 ) {
   const user = await getRequiredUser();
+  if (isAuthError(user)) return user;
   const { repoId } = await params;
   const db = getDb();
 

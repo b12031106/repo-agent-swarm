@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { getDb, schema } from "@/lib/db";
 import { sql, eq } from "drizzle-orm";
-import { getRequiredUser } from "@/lib/auth/get-user";
+import { getRequiredUser, isAuthError } from "@/lib/auth/get-user";
 
 /** GET /api/usage - Get aggregated usage stats */
 export async function GET() {
   const user = await getRequiredUser();
+  if (isAuthError(user)) return user;
   const db = getDb();
 
   const stats = db

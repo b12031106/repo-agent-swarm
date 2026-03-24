@@ -1,7 +1,8 @@
 import { getDb, schema } from "@/lib/db";
-import { sql, lt, and, isNotNull } from "drizzle-orm";
+import { sql, lt, and, isNotNull, like } from "drizzle-orm";
 import { getActiveStreamIds } from "@/lib/streaming/active-streams";
 import { cleanupExpiredUploads } from "@/lib/uploads";
+import { GUEST_CONVERSATION_TTL_HOURS } from "@/lib/auth/guest";
 
 export interface CleanupOptions {
   conversationMaxAgeDays?: number;
@@ -11,6 +12,7 @@ export interface CleanupOptions {
 
 export interface CleanupResult {
   expiredConversations: number;
+  expiredGuestConversations: number;
   expiredCache: number;
   expiredAuthSessions: number;
   expiredShares: number;
@@ -28,6 +30,7 @@ export function runCleanup(options?: CleanupOptions): CleanupResult {
 
   const result: CleanupResult = {
     expiredConversations: 0,
+    expiredGuestConversations: 0,
     expiredCache: 0,
     expiredAuthSessions: 0,
     expiredShares: 0,
@@ -65,6 +68,21 @@ export function runCleanup(options?: CleanupOptions): CleanupResult {
     .run();
   result.expiredShares = sharesDeleted.changes;
 
+  // 3.5. Clean expired guest conversations (24 hours TTL)
+  const guestConvCutoff = new Date(
+    now.getTime() - GUEST_CONVERSATION_TTL_HOURS * 3600000
+  ).toISOString();
+  const guestConvDeleted = db
+    .delete(schema.conversations)
+    .where(
+      and(
+        like(schema.conversations.userId, "guest_%"),
+        lt(schema.conversations.updatedAt, guestConvCutoff)
+      )
+    )
+    .run();
+  result.expiredGuestConversations = guestConvDeleted.changes;
+
   // 4. Clean expired conversations (excluding active streams)
   const convCutoff = new Date(
     now.getTime() - convMaxAge * 86400000
@@ -84,7 +102,7 @@ export function runCleanup(options?: CleanupOptions): CleanupResult {
       .where(sql`${schema.conversations.id} = ${conv.id}`)
       .run();
   }
-  result.expiredConversations = toDelete.length;
+  result.expiredConversations += toDelete.length;
 
   // 5. Clean orphan usage records (older than usageMaxAge)
   const usageCutoff = new Date(

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, schema } from "@/lib/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { getRequiredUser } from "@/lib/auth/get-user";
+import { getRequiredUser, isAuthError } from "@/lib/auth/get-user";
 
 // GET: Read shared conversation (public, no auth required)
 export async function GET(
@@ -118,6 +118,7 @@ export async function DELETE(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const user = await getRequiredUser();
+  if (isAuthError(user)) return user;
   const { token } = await params;
   const db = getDb();
 

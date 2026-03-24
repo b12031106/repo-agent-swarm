@@ -4,6 +4,7 @@ import { SessionProvider } from "next-auth/react";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
+import { GuestBanner } from "@/components/auth/guest-banner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,9 +33,12 @@ export default function RootLayout({
       >
         <SessionProvider>
           <ThemeProvider>
-            <div className="flex h-screen">
-              <Sidebar />
-              <main className="flex-1 min-w-0 overflow-hidden">{children}</main>
+            <div className="flex h-screen flex-col">
+              <GuestBanner />
+              <div className="flex flex-1 min-w-0">
+                <Sidebar />
+                <main className="flex-1 min-w-0 overflow-hidden">{children}</main>
+              </div>
             </div>
           </ThemeProvider>
         </SessionProvider>

@@ -6,14 +6,15 @@ import { createSSEStream } from "@/lib/streaming/sse-encoder";
 import { getUploadedFile } from "@/lib/uploads";
 import fs from "fs";
 import type { AgentStreamEvent } from "@/types";
-import { getRequiredUser } from "@/lib/auth/get-user";
+import { getRequiredUser, isAuthError } from "@/lib/auth/get-user";
 
 /** POST /api/repos/[repoId]/scan-with-doc - Scan with document assistance */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ repoId: string }> }
 ) {
-  await getRequiredUser();
+  const _authCheck = await getRequiredUser();
+  if (isAuthError(_authCheck)) return _authCheck;
   const { repoId } = await params;
   const body = await request.json();
   const { attachmentId, documentText } = body;

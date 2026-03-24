@@ -3,11 +3,12 @@ import { getDb, schema } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import crypto from "crypto";
-import { getRequiredUser } from "@/lib/auth/get-user";
+import { getRequiredAuthUser, isAuthError } from "@/lib/auth/get-user";
 
-// POST: Create a share link
+// POST: Create a share link (requires real account)
 export async function POST(request: NextRequest) {
-  const user = await getRequiredUser();
+  const user = await getRequiredAuthUser();
+  if (isAuthError(user)) return user;
   const body = await request.json();
   const { conversationId, messageIds, title, expiresInDays } = body as {
     conversationId: string;

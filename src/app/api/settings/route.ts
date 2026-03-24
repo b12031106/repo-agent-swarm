@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
-import { getRequiredUser } from "@/lib/auth/get-user";
+import { getRequiredUser, getRequiredAuthUser, isAuthError } from "@/lib/auth/get-user";
 
 /** GET /api/settings?key=xxx - Read a setting */
 export async function GET(request: NextRequest) {
-  await getRequiredUser();
+  const _authCheck = await getRequiredUser();
+  if (isAuthError(_authCheck)) return _authCheck;
   const key = request.nextUrl.searchParams.get("key");
   if (!key) {
     return NextResponse.json(
@@ -28,9 +29,10 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(setting);
 }
 
-/** PUT /api/settings - Upsert a setting */
+/** PUT /api/settings - Upsert a setting (requires real account) */
 export async function PUT(request: NextRequest) {
-  await getRequiredUser();
+  const _authCheck = await getRequiredAuthUser();
+  if (isAuthError(_authCheck)) return _authCheck;
   const body = await request.json();
   const { key, value } = body;
 

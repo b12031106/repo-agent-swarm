@@ -14,19 +14,21 @@ import {
   computeClaudeMdHash,
   debouncedGenerateMasterClaudeMd,
 } from "@/lib/claude-md";
-import { getRequiredUser } from "@/lib/auth/get-user";
+import { getRequiredUser, getRequiredAuthUser, isAuthError } from "@/lib/auth/get-user";
 
 /** GET /api/repos - List all repos */
 export async function GET() {
-  await getRequiredUser();
+  const _authCheck = await getRequiredUser();
+  if (isAuthError(_authCheck)) return _authCheck;
   const db = getDb();
   const allRepos = db.select().from(schema.repos).all();
   return NextResponse.json(allRepos);
 }
 
-/** POST /api/repos - Register and clone a new repo */
+/** POST /api/repos - Register and clone a new repo (requires real account) */
 export async function POST(request: NextRequest) {
-  await getRequiredUser();
+  const _authCheck = await getRequiredAuthUser();
+  if (isAuthError(_authCheck)) return _authCheck;
   const body = await request.json();
   const { githubUrl, name, customPrompt, description, domain, serviceType, techStack, teamOwner, installationId } = body;
 

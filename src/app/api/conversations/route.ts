@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, schema } from "@/lib/db";
 import { eq, desc, and } from "drizzle-orm";
-import { getRequiredUser } from "@/lib/auth/get-user";
+import { getRequiredUser, isAuthError } from "@/lib/auth/get-user";
 
 /** GET /api/conversations - List all conversations */
 export async function GET(request: NextRequest) {
   const user = await getRequiredUser();
+  if (isAuthError(user)) return user;
   const searchParams = request.nextUrl.searchParams;
   const repoId = searchParams.get("repoId");
   const type = searchParams.get("type");
@@ -54,6 +55,7 @@ export async function GET(request: NextRequest) {
 /** GET /api/conversations/[id]/messages */
 export async function POST(request: NextRequest) {
   const user = await getRequiredUser();
+  if (isAuthError(user)) return user;
   const body = await request.json();
   const { conversationId } = body;
 

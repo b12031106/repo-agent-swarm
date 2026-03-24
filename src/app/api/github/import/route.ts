@@ -11,7 +11,7 @@ import {
   computeClaudeMdHash,
   debouncedGenerateMasterClaudeMd,
 } from "@/lib/claude-md";
-import { getRequiredUser } from "@/lib/auth/get-user";
+import { getRequiredAuthUser, isAuthError } from "@/lib/auth/get-user";
 
 interface ImportRepoItem {
   name: string;
@@ -19,7 +19,8 @@ interface ImportRepoItem {
 }
 
 export async function POST(request: NextRequest) {
-  await getRequiredUser();
+  const _authCheck = await getRequiredAuthUser();
+  if (isAuthError(_authCheck)) return _authCheck;
   if (!isConfigured()) {
     return NextResponse.json(
       { error: "GitHub App not configured" },

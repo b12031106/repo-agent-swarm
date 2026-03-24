@@ -7,7 +7,8 @@ import { createSSEStream } from "@/lib/streaming/sse-encoder";
 import { buildMessageWithAttachments } from "@/lib/uploads/message-builder";
 import { getUploadedFile } from "@/lib/uploads";
 import { masterClaudeMdExists, generateMasterClaudeMd } from "@/lib/claude-md";
-import { getRequiredUser } from "@/lib/auth/get-user";
+import { getRequiredUser, isAuthError } from "@/lib/auth/get-user";
+import { checkGuestRateLimit } from "@/lib/auth/guest-rate-limit";
 import type { AgentStreamEvent } from "@/types";
 
 /**
@@ -16,6 +17,7 @@ import type { AgentStreamEvent } from "@/types";
  */
 export async function POST(request: NextRequest) {
   const user = await getRequiredUser();
+  if (isAuthError(user)) return user;
   const body = await request.json();
   const { message, conversationId, model, attachmentIds } = body;
 
@@ -24,6 +26,12 @@ export async function POST(request: NextRequest) {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  // 訪客速率限制
+  if (user.isGuest) {
+    const limited = checkGuestRateLimit(user.id);
+    if (limited) return limited;
   }
 
   const db = getDb();

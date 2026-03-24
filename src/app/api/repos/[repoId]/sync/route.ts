@@ -10,14 +10,15 @@ import {
   getRepoDescriptionSource,
   updateMasterClaudeMdForRepo,
 } from "@/lib/claude-md";
-import { getRequiredUser } from "@/lib/auth/get-user";
+import { getRequiredUser, isAuthError } from "@/lib/auth/get-user";
 
 /** POST /api/repos/[repoId]/sync - Trigger git pull */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ repoId: string }> }
 ) {
-  await getRequiredUser();
+  const _authCheck = await getRequiredUser();
+  if (isAuthError(_authCheck)) return _authCheck;
   const { repoId } = await params;
   const db = getDb();
 

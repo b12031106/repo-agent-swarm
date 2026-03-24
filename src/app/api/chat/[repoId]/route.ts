@@ -6,7 +6,8 @@ import { agentManager } from "@/lib/agents/agent-manager";
 import { createSSEStream } from "@/lib/streaming/sse-encoder";
 import { buildMessageWithAttachments } from "@/lib/uploads/message-builder";
 import { getUploadedFile } from "@/lib/uploads";
-import { getRequiredUser } from "@/lib/auth/get-user";
+import { getRequiredUser, isAuthError } from "@/lib/auth/get-user";
+import { checkGuestRateLimit } from "@/lib/auth/guest-rate-limit";
 import type { AgentStreamEvent } from "@/types";
 
 /** POST /api/chat/[repoId] - Send a message and get SSE stream response */
@@ -15,6 +16,7 @@ export async function POST(
   { params }: { params: Promise<{ repoId: string }> }
 ) {
   const user = await getRequiredUser();
+  if (isAuthError(user)) return user;
   const { repoId } = await params;
   const body = await request.json();
   const { message, conversationId, model, attachmentIds } = body;
@@ -24,6 +26,12 @@ export async function POST(
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  // 訪客速率限制
+  if (user.isGuest) {
+    const limited = checkGuestRateLimit(user.id);
+    if (limited) return limited;
   }
 
   const db = getDb();

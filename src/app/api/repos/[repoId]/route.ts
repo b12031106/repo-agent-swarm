@@ -4,14 +4,15 @@ import { eq } from "drizzle-orm";
 import { removeRepo } from "@/lib/git/clone";
 import { agentManager } from "@/lib/agents/agent-manager";
 import { removeRepoFromMasterClaudeMd } from "@/lib/claude-md";
-import { getRequiredUser } from "@/lib/auth/get-user";
+import { getRequiredUser, getRequiredAuthUser, isAuthError } from "@/lib/auth/get-user";
 
 /** GET /api/repos/[repoId] - Get a single repo */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ repoId: string }> }
 ) {
-  await getRequiredUser();
+  const _authCheck = await getRequiredUser();
+  if (isAuthError(_authCheck)) return _authCheck;
   const { repoId } = await params;
   const db = getDb();
   const repo = db
@@ -27,12 +28,13 @@ export async function GET(
   return NextResponse.json(repo);
 }
 
-/** PATCH /api/repos/[repoId] - Update repo settings */
+/** PATCH /api/repos/[repoId] - Update repo settings (requires real account) */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ repoId: string }> }
 ) {
-  await getRequiredUser();
+  const _authCheck = await getRequiredAuthUser();
+  if (isAuthError(_authCheck)) return _authCheck;
   const { repoId } = await params;
   const body = await request.json();
   const {
@@ -87,12 +89,13 @@ export async function PATCH(
   return NextResponse.json(updated);
 }
 
-/** DELETE /api/repos/[repoId] - Remove a repo */
+/** DELETE /api/repos/[repoId] - Remove a repo (requires real account) */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ repoId: string }> }
 ) {
-  await getRequiredUser();
+  const _authCheck2 = await getRequiredAuthUser();
+  if (isAuthError(_authCheck2)) return _authCheck2;
   const { repoId } = await params;
   const db = getDb();
 

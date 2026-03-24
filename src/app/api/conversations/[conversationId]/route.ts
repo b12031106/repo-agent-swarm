@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, schema } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
-import { getRequiredUser } from "@/lib/auth/get-user";
+import { getRequiredUser, isAuthError } from "@/lib/auth/get-user";
 
 /** DELETE /api/conversations/[conversationId] */
 export async function DELETE(
@@ -9,6 +9,7 @@ export async function DELETE(
   { params }: { params: Promise<{ conversationId: string }> }
 ) {
   const user = await getRequiredUser();
+  if (isAuthError(user)) return user;
   const { conversationId } = await params;
   const db = getDb();
 

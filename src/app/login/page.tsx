@@ -1,13 +1,33 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
 
 function LoginContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/";
   const error = searchParams.get("error");
+  const [isLoadingGuest, setIsLoadingGuest] = useState(false);
+
+  const [guestError, setGuestError] = useState("");
+
+  const handleGuestAccess = async () => {
+    setIsLoadingGuest(true);
+    setGuestError("");
+    try {
+      const res = await fetch("/api/guest/session", { method: "POST" });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      router.push(callbackUrl);
+    } catch (err) {
+      console.error("Failed to create guest session:", err);
+      setGuestError("建立訪客工作階段失敗，請再試一次。");
+      setIsLoadingGuest(false);
+    }
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
@@ -50,6 +70,20 @@ function LoginContent() {
             />
           </svg>
           使用 Google 帳號登入
+        </button>
+
+        {guestError && (
+          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            {guestError}
+          </div>
+        )}
+
+        <button
+          onClick={handleGuestAccess}
+          disabled={isLoadingGuest}
+          className="w-full rounded-md border border-dashed border-muted-foreground px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+        >
+          {isLoadingGuest ? "載入中..." : "快速試用（無需登入，24 小時後自動刪除）"}
         </button>
       </div>
     </div>

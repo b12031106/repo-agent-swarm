@@ -5,11 +5,12 @@ import {
   cleanupExpiredUploads,
 } from "@/lib/uploads";
 import type { UploadedAttachment } from "@/types";
-import { getRequiredUser } from "@/lib/auth/get-user";
+import { getRequiredAuthUser, isAuthError } from "@/lib/auth/get-user";
 
-/** POST /api/upload - Upload files (multipart/form-data) */
+/** POST /api/upload - Upload files (multipart/form-data, requires real account) */
 export async function POST(request: NextRequest) {
-  await getRequiredUser();
+  const _authCheck = await getRequiredAuthUser();
+  if (isAuthError(_authCheck)) return _authCheck;
   try {
     // Cleanup expired uploads in background
     cleanupExpiredUploads();
