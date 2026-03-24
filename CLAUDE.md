@@ -22,9 +22,27 @@ pnpm lint         # ESLint 檢查
 ```
 前端 (React + Zustand Chat Store + SSE)
     ↓
-API Routes (Next.js App Router, /api/*)
+API Routes (Next.js App Router, /api/*)  ←  NextAuth v5 中間件保護
     ↓
 Agent Layer (AgentProvider → CLI spawn)  →  SQLite (Drizzle ORM)
+```
+
+### 認證與授權
+
+使用 **NextAuth v5 Beta** + Google OAuth，自訂 SQLite adapter（`src/lib/auth/adapter.ts`）：
+
+- `authConfig` 分離於 `src/lib/auth/config.ts`（Edge Runtime 相容，供中間件使用）
+- 中間件（`src/middleware.ts`）保護所有路由，白名單：`/api/auth/*`, `/share/*`, `/login`, 靜態資源
+- 未認證 API → 401；未認證頁面 → 302 重導 `/login?callbackUrl={pathname}`
+- `getUser()` / `getRequiredUser()`（`src/lib/auth/get-user.ts`）供 API routes 取得當前使用者
+- 可透過 `ALLOWED_EMAIL_DOMAINS` 限制允許登入的 email 網域
+
+環境變數（`.env.local`）：
+```
+AUTH_SECRET=...
+AUTH_GOOGLE_ID=...
+AUTH_GOOGLE_SECRET=...
+ALLOWED_EMAIL_DOMAINS=company.com  # 可選，逗號分隔
 ```
 
 ### 狀態管理
@@ -69,11 +87,20 @@ claude --print --output-format stream-json --verbose \
 
 ### 資料層
 
-- SQLite + Drizzle ORM，5 張表：`repos`, `settings`, `conversations`, `messages`, `usageRecords`
+- SQLite + Drizzle ORM，9 張表：`users`, `accounts`, `authSessions`, `repos`, `settings`, `conversations`, `messages`, `cache`, `usageRecords`, `shares`
 - DB 路徑：`./data/repo-agent-swarm.db`（首次查詢自動建立）
 - Schema 定義在 `src/lib/db/schema.ts`，連線與 inline migration 在 `src/lib/db/index.ts`
 - 新欄位的 migration 使用 `ALTER TABLE ADD COLUMN` + try-catch 包裹
 - `settings` 表為 key-value 結構，用於全域設定（如 `orchestratorCustomPrompt`）
+- **Per-user 隔離**：`conversations.userId` 和 `usageRecords.userId` 關聯當前使用者，所有查詢都帶 userId 過濾
+
+### 對話分享
+
+- `shares` 表儲存分享連結，使用加密 base64url token
+- 支援分享整個對話或選擇性訊息（`messageIds` JSON 欄位）
+- 可設過期時間（1/7/30/90 天或永不），自動追蹤檢視次數
+- 公開分享頁面 `/share/[token]` 無需認證，會過濾 `tool` 訊息（防止暴露內部路徑）
+- 撤銷分享需驗證所有者身份
 
 ### 檔案上傳
 
@@ -94,6 +121,14 @@ claude --print --output-format stream-json --verbose \
 - `src/lib/streaming/sse-encoder.ts`：`createSSEStream(generator, { onCancel })` 建立 ReadableStream
 - `onCancel` callback 在客戶端斷線時觸發，保存已累積的 assistant 文字到 DB
 - Chat API routes 回傳 `text/event-stream`，header 帶 `X-Conversation-Id`
+- `getActiveStreamIds()` 追蹤進行中的串流，防止清理程序誤刪活躍對話
+
+### 自動清理排程
+
+- 清理模組（`src/lib/cleanup/`）：過期快取、auth sessions、分享、對話（90 天）、使用記錄（180 天）
+- 透過 Next.js `instrumentation.ts` hook 啟動排程器：啟動後 30 秒首次執行，之後每 6 小時
+- 每 7 天執行一次 SQLite VACUUM
+- 手動觸發：`POST /api/admin/cleanup`（需認證）
 
 ### GitHub App 整合
 
@@ -104,7 +139,6 @@ claude --print --output-format stream-json --verbose \
 - **認證流程**：App ID + Private Key → RS256 JWT → Installation Access Token（記憶體快取，過期前 5 分鐘自動刷新）
 - **clone/sync**：有 `installationId` 的 repo 自動用 `x-access-token:{token}@github.com` URL 認證
 - **安全**：帶 token 的 URL 不 log 也不存 DB，`syncRepo` 完成後還原 remote URL
-- **DB**：`repos.installation_id` 記錄關聯的 GitHub App Installation
 - **不需額外 npm 套件**，用 Node.js 內建 `crypto` + `fetch`
 
 ## 關鍵技術限制
@@ -116,6 +150,7 @@ claude --print --output-format stream-json --verbose \
 - **.npmrc 需設定 `onlyBuiltDependencies[]=better-sqlite3`** 讓 pnpm 正確編譯 native module
 - shadcn/ui CSS 變數格式是 HSL 無 `hsl()` 函數：`--primary: 0 0% 9%`，使用時要包 `hsl(var(--primary))`
 - **Zustand SSR**：所有使用 store 的元件必須為 `"use client"`
+- **NextAuth Edge 相容**：中間件只能用 `authConfig`（不含 adapter），完整 `auth()` 只在 Node.js runtime 使用
 - **AgentProvider 介面目前仍有 Claude Code 耦合**：`AgentQueryOptions` 的 `tools`, `agents`, `sessionId` 等欄位是 Claude Code 特有的，未來擴展到其他 provider 時需重構
 
 ## API 端點
@@ -131,15 +166,33 @@ claude --print --output-format stream-json --verbose \
 | `/api/chat/[repoId]/history` | GET | 取得對話歷史訊息 |
 | `/api/chat/orchestrator` | POST | 跨 repo 對話（SSE stream，同上） |
 | `/api/chat/analysis` | POST | 需求分析模式（SSE stream，structuredOutput + 多輪迭代 + Opus） |
-| `/api/conversations` | GET/POST | 對話列表/載入訊息 |
+| `/api/conversations` | GET | 對話列表（query: `repoId?`, `type?`） |
 | `/api/conversations/[id]` | DELETE | 刪除對話 |
+| `/api/conversations/[id]/shares` | GET | 列出對話的分享連結 |
+| `/api/share` | POST | 建立分享連結 |
+| `/api/share/[token]` | GET/DELETE | 讀取/撤銷分享（GET 公開無需認證） |
 | `/api/upload` | POST | 上傳附件（multipart/form-data） |
 | `/api/settings` | GET/PUT | 全域設定（如 orchestrator 自訂提示） |
 | `/api/usage` | GET | Token 使用統計 |
-| `/api/github/status` | GET | GitHub App 設定狀態（`{ configured: boolean }`） |
+| `/api/admin/cleanup` | POST | 手動觸發資料清理 |
+| `/api/github/status` | GET | GitHub App 設定狀態 |
 | `/api/github/installations` | GET | 列出已安裝 App 的組織 |
 | `/api/github/installations/[id]/repos` | GET | 列出組織的 repo（標記已匯入） |
-| `/api/github/import` | POST | 批次匯入 repo（body 含 `installationId`, `repos[]`） |
+| `/api/github/import` | POST | 批次匯入 repo |
+
+## 前端頁面
+
+| 路由 | 功能 |
+|------|------|
+| `/` | 首頁（repo 列表 + 總覽） |
+| `/repos` | Repo 管理 |
+| `/repos/[repoId]` | 單 repo 聊天介面 |
+| `/orchestrator` | 跨 repo 總顧問 |
+| `/analysis` | PM 需求分析（structuredOutput + Opus） |
+| `/conversations` | 全域對話列表（標籤過濾：全部/Repo/總顧問/分析） |
+| `/settings` | 全域設定 |
+| `/login` | Google OAuth 登入 |
+| `/share/[token]` | 公開分享頁面（無需登入） |
 
 ## 執行時路徑
 
