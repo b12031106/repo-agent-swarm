@@ -53,8 +53,28 @@ cp .env.example .env.local
 ```
 
 **認證設定**（Google OAuth）：
+
+前往 [Google Cloud Console](https://console.cloud.google.com/) 建立 OAuth 2.0 憑證：
+
+1. 建立或選擇一個 Project
+2. 前往 **APIs & Services → OAuth consent screen**
+   - User Type 選 **Internal**（僅限組織成員）或 **External**
+   - 填入 App name、User support email
+3. 前往 **APIs & Services → Credentials → Create Credentials → OAuth client ID**
+   - Application type 選 **Web application**
+   - **Authorized JavaScript origins** 加入：
+     ```
+     http://localhost:3000
+     ```
+   - **Authorized redirect URIs** 加入：
+     ```
+     http://localhost:3000/api/auth/callback/google
+     ```
+   - 若有正式網域，也一併加入（將 `localhost:3000` 替換為正式 domain）
+4. 建立後取得 **Client ID** 與 **Client Secret**
+
 ```env
-AUTH_SECRET=your-random-secret
+AUTH_SECRET=your-random-secret            # 執行 `openssl rand -base64 32` 產生
 AUTH_GOOGLE_ID=your-google-oauth-client-id
 AUTH_GOOGLE_SECRET=your-google-oauth-client-secret
 ALLOWED_EMAIL_DOMAINS=company.com          # 可選，限制登入網域
