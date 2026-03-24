@@ -180,6 +180,7 @@ export async function POST(
           conversationId: finalConvId,
           role: "assistant",
           content: fullAssistantText,
+          model: effectiveModel,
         })
         .run();
     }
@@ -206,6 +207,7 @@ export async function POST(
             conversationId: finalConvId,
             role: "assistant",
             content: accumulatedText,
+            model: effectiveModel,
           })
           .run();
       }

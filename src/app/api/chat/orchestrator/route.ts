@@ -187,6 +187,7 @@ export async function POST(request: NextRequest) {
           conversationId: finalConvId,
           role: "assistant",
           content: fullAssistantText,
+          model: effectiveModel,
         })
         .run();
     }
@@ -211,6 +212,7 @@ export async function POST(request: NextRequest) {
             conversationId: finalConvId,
             role: "assistant",
             content: accumulatedText,
+            model: effectiveModel,
           })
           .run();
       }

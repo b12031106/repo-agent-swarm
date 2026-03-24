@@ -51,6 +51,7 @@ export interface ChatMessage {
   attachments?: ChatMessageAttachment[];
   currentIteration?: number;
   maxIterations?: number;
+  model?: string;
 }
 
 export interface ChatSession {
@@ -207,6 +208,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         content: string;
         toolName: string | null;
         attachmentsJson: string | null;
+        model: string | null;
         createdAt: string;
       }> = await res.json();
 
@@ -227,6 +229,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             content: m.content,
             isStreaming: false,
             attachments,
+            model: m.model || undefined,
           };
         });
 
@@ -285,6 +288,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       role: "assistant",
       content: "",
       isStreaming: true,
+      model: session.model,
     };
 
     const controller = new AbortController();

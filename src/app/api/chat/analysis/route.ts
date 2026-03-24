@@ -73,6 +73,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const effectiveModel = model || "opus";
+
   if (!convId) {
     convId = uuidv4();
     db.insert(schema.conversations)
@@ -126,7 +128,7 @@ export async function POST(request: NextRequest) {
   // Create orchestrator agent with analysis-mode settings
   const orchestrator = new OrchestratorAgent({
     customPrompt: orchestratorPromptSetting?.value || null,
-    model: model || "opus",
+    model: effectiveModel,
     maxBudgetUsd: 5.0,
     structuredOutput: true,
   });
@@ -142,7 +144,7 @@ export async function POST(request: NextRequest) {
     let resultSessionId: string | undefined;
     const totalUsage = { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
 
-    for await (const event of orchestrator.query(enhancedMessage, sessionId, model || "opus")) {
+    for await (const event of orchestrator.query(enhancedMessage, sessionId, effectiveModel)) {
       // Accumulate all text
       if (event.type === "text" && event.content) {
         fullAssistantText += event.content;
@@ -183,6 +185,7 @@ export async function POST(request: NextRequest) {
           conversationId: finalConvId,
           role: "assistant",
           content: fullAssistantText,
+          model: effectiveModel,
         })
         .run();
     }
@@ -207,6 +210,7 @@ export async function POST(request: NextRequest) {
             conversationId: finalConvId,
             role: "assistant",
             content: accumulatedText,
+            model: effectiveModel,
           })
           .run();
       }

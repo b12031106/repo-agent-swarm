@@ -167,8 +167,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             )}
 
             {/* Usage summary */}
-            {!message.isStreaming && message.usage && (
-              <UsageSummary usage={message.usage} />
+            {!message.isStreaming && (message.usage || message.model) && (
+              <UsageSummary usage={message.usage} model={message.model} />
             )}
           </>
         )}
@@ -689,17 +689,28 @@ function getToolInfo(activity: ToolActivity): {
 }
 
 /** Token usage and cost summary */
-function UsageSummary({ usage }: { usage: UsageInfo }) {
+function UsageSummary({ usage, model }: { usage?: UsageInfo; model?: string }) {
   return (
     <div className="flex items-center gap-3 rounded-lg bg-card border border-border/60 px-3 py-1.5 text-[11px] text-muted-foreground">
-      <Coins className="h-3 w-3 shrink-0" />
-      <span>
-        Token: {formatNumber(usage.input_tokens)} 輸入 / {formatNumber(usage.output_tokens)} 輸出
-      </span>
-      {usage.cost_usd > 0 && (
+      {model && (
+        <span className="flex items-center gap-1">
+          <Bot className="h-3 w-3 shrink-0" />
+          <span>{model}</span>
+        </span>
+      )}
+      {model && usage && <span className="text-border">|</span>}
+      {usage && (
         <>
-          <span className="text-border">|</span>
-          <span>成本: ${usage.cost_usd.toFixed(4)}</span>
+          <Coins className="h-3 w-3 shrink-0" />
+          <span>
+            Token: {formatNumber(usage.input_tokens)} 輸入 / {formatNumber(usage.output_tokens)} 輸出
+          </span>
+          {usage.cost_usd > 0 && (
+            <>
+              <span className="text-border">|</span>
+              <span>成本: ${usage.cost_usd.toFixed(4)}</span>
+            </>
+          )}
         </>
       )}
     </div>

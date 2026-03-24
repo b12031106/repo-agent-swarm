@@ -83,6 +83,9 @@ function createDb() {
   // Migration: add claude_md_hash column to repos
   try { db.run(sql`ALTER TABLE repos ADD COLUMN claude_md_hash TEXT`); } catch { /* exists */ }
 
+  // Migration: add model column to messages
+  try { db.run(sql`ALTER TABLE messages ADD COLUMN model TEXT`); } catch { /* exists */ }
+
   // Auth tables
   db.run(sql`
     CREATE TABLE IF NOT EXISTS users (

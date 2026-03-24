@@ -110,6 +110,7 @@ export const messages = sqliteTable("messages", {
   content: text("content").notNull(),
   toolName: text("tool_name"),
   attachmentsJson: text("attachments_json"),
+  model: text("model"),
   createdAt: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
