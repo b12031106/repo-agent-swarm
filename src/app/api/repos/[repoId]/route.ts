@@ -28,12 +28,12 @@ export async function GET(
   return NextResponse.json(repo);
 }
 
-/** PATCH /api/repos/[repoId] - Update repo settings (requires real account) */
+/** PATCH /api/repos/[repoId] - Update repo settings */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ repoId: string }> }
 ) {
-  const _authCheck = await getRequiredAuthUser();
+  const _authCheck = await getRequiredUser();
   if (isAuthError(_authCheck)) return _authCheck;
   const { repoId } = await params;
   const body = await request.json();

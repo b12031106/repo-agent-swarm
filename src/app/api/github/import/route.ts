@@ -11,7 +11,7 @@ import {
   computeClaudeMdHash,
   debouncedGenerateMasterClaudeMd,
 } from "@/lib/claude-md";
-import { getRequiredAuthUser, isAuthError } from "@/lib/auth/get-user";
+import { getRequiredUser, isAuthError } from "@/lib/auth/get-user";
 
 interface ImportRepoItem {
   name: string;
@@ -19,7 +19,7 @@ interface ImportRepoItem {
 }
 
 export async function POST(request: NextRequest) {
-  const _authCheck = await getRequiredAuthUser();
+  const _authCheck = await getRequiredUser();
   if (isAuthError(_authCheck)) return _authCheck;
   if (!isConfigured()) {
     return NextResponse.json(

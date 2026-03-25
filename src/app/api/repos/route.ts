@@ -14,7 +14,7 @@ import {
   computeClaudeMdHash,
   debouncedGenerateMasterClaudeMd,
 } from "@/lib/claude-md";
-import { getRequiredUser, getRequiredAuthUser, isAuthError } from "@/lib/auth/get-user";
+import { getRequiredUser, isAuthError } from "@/lib/auth/get-user";
 
 /** GET /api/repos - List all repos */
 export async function GET() {
@@ -25,9 +25,9 @@ export async function GET() {
   return NextResponse.json(allRepos);
 }
 
-/** POST /api/repos - Register and clone a new repo (requires real account) */
+/** POST /api/repos - Register and clone a new repo */
 export async function POST(request: NextRequest) {
-  const _authCheck = await getRequiredAuthUser();
+  const _authCheck = await getRequiredUser();
   if (isAuthError(_authCheck)) return _authCheck;
   const body = await request.json();
   const { githubUrl, name, customPrompt, description, domain, serviceType, techStack, teamOwner, installationId } = body;
