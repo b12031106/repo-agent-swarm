@@ -391,7 +391,13 @@ export function RepoSettingsDialog({
                     <Input
                       value={newDepName}
                       onChange={(e) => setNewDepName(e.target.value)}
-                      onKeyDown={(e) => !e.nativeEvent.isComposing && e.key === "Enter" && (e.preventDefault(), addDependency())}
+                      onKeyDown={(e) => {
+                        if (e.nativeEvent.isComposing || e.key === "Process") return;
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addDependency();
+                        }
+                      }}
                       placeholder="輸入服務名稱或選擇已註冊 Repo"
                       disabled={saving || scanning}
                       className="text-xs flex-1"
