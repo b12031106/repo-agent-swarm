@@ -90,6 +90,9 @@ export function ChatInput({
   }, [input, canSend, isLoading, onSend, attachments]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // IME 選字中（如注音、倉頡）不處理 Enter，避免未完成輸入就送出
+    if (e.nativeEvent.isComposing || e.key === "Process") return;
+
     if (enterMode === "enter-send") {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
