@@ -189,6 +189,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const session = get().sessions.get(chatId);
     if (!session || session.historyLoaded || session.isLoading) return;
 
+    // Skip if session already has messages (e.g., from an active/completed background stream)
+    if (session.messages.length > 0) {
+      get()._updateSession(chatId, () => ({ historyLoaded: true }));
+      return;
+    }
+
     get()._updateSession(chatId, () => ({
       isLoadingHistory: true,
       historyLoaded: true,

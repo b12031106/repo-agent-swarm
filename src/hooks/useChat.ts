@@ -28,11 +28,20 @@ interface UseChatOptions {
 export function useChat(options: UseChatOptions) {
   // Stable chat ID: fixed on first mount (either conversationId or generated).
   // This MUST NOT change when conversationId is assigned mid-stream.
-  const chatId = useMemo(
-    () => options.conversationId || `new-${Date.now()}`,
+  // When returning to a conversation that has an active background stream,
+  // reuse the existing session's chatId so we reconnect to the live stream.
+  const chatId = useMemo(() => {
+    if (options.conversationId) {
+      const sessions = useChatStore.getState().sessions;
+      for (const [id, session] of sessions) {
+        if (session.conversationId === options.conversationId) {
+          return id;
+        }
+      }
+    }
+    return options.conversationId || `new-${Date.now()}`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
+  }, []);
 
   const store = useChatStore();
 
