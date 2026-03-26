@@ -19,7 +19,7 @@ export async function POST(
   if (isAuthError(user)) return user;
   const { repoId } = await params;
   const body = await request.json();
-  const { message, conversationId, model, attachmentIds } = body;
+  const { message, conversationId, model, outputStyleId, attachmentIds } = body;
 
   if (!message) {
     return new Response(JSON.stringify({ error: "message is required" }), {
@@ -61,6 +61,7 @@ export async function POST(
   let convId = conversationId;
   let sessionId: string | undefined;
   let convModel: string | undefined;
+  let convOutputStyleId: string | undefined;
 
   if (convId) {
     const conv = db
@@ -71,11 +72,26 @@ export async function POST(
     if (conv) {
       sessionId = conv.sessionId || undefined;
       convModel = conv.model || undefined;
+      convOutputStyleId = conv.outputStyleId || undefined;
     }
   }
 
   // Use request model, fallback to conversation model, then default
   const effectiveModel = model || convModel || "sonnet";
+
+  // Resolve output style
+  const effectiveStyleId = outputStyleId || convOutputStyleId;
+  let outputStylePrompt: string | null = null;
+  if (effectiveStyleId) {
+    const style = db
+      .select()
+      .from(schema.outputStyles)
+      .where(eq(schema.outputStyles.id, effectiveStyleId))
+      .get();
+    if (style?.promptText) {
+      outputStylePrompt = style.promptText;
+    }
+  }
 
   if (!convId) {
     convId = uuidv4();
@@ -86,6 +102,7 @@ export async function POST(
         title: message.slice(0, 100),
         isOrchestrator: false,
         model: effectiveModel,
+        outputStyleId: effectiveStyleId || null,
         userId: user.id,
       })
       .run();
@@ -141,7 +158,7 @@ export async function POST(
     let fullAssistantText = "";
     let resultSessionId: string | undefined;
 
-    for await (const event of agent.query(enhancedMessage, sessionId, effectiveModel)) {
+    for await (const event of agent.query(enhancedMessage, sessionId, effectiveModel, outputStylePrompt)) {
       // Accumulate assistant text
       if (event.type === "text" && event.content) {
         fullAssistantText += event.content;

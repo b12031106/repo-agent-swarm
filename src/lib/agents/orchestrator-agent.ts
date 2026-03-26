@@ -38,18 +38,21 @@ export class OrchestratorAgent {
     message: string,
     conversationSessionId?: string,
     model?: string,
+    outputStylePrompt?: string | null,
   ): AsyncGenerator<AgentStreamEvent> {
     const sid = conversationSessionId || this.sessionId;
-    yield* this.runQuery(message, sid, model);
+    yield* this.runQuery(message, sid, model, outputStylePrompt);
   }
 
   private async *runQuery(
     message: string,
     sessionId?: string | null,
     model?: string,
+    outputStylePrompt?: string | null,
   ): AsyncGenerator<AgentStreamEvent> {
     const systemPrompt = getOrchestratorDirectPrompt(this.config.customPrompt, {
       structuredOutput: this.config.structuredOutput,
+      outputStylePrompt,
     });
 
     const reposDir = path.join(process.cwd(), "repos");
@@ -90,7 +93,7 @@ export class OrchestratorAgent {
 
       if (event.type === "done" && resumeFailed && !hasContent) {
         console.warn("[OrchestratorAgent] Session resume failed, retrying without session");
-        yield* this.runQuery(message, null, model);
+        yield* this.runQuery(message, null, model, outputStylePrompt);
         return;
       }
 

@@ -184,6 +184,35 @@ function createDb() {
     )
   `);
 
+  // Output styles table
+  db.run(sql`
+    CREATE TABLE IF NOT EXISTS output_styles (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      name TEXT NOT NULL,
+      description TEXT,
+      prompt_text TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
+  // Migration: add output_style_id to conversations
+  try { db.run(sql`ALTER TABLE conversations ADD COLUMN output_style_id TEXT`); } catch { /* exists */ }
+
+  // Seed system preset output styles
+  const now = new Date().toISOString();
+  const presets = [
+    { id: "preset-default", name: "預設", description: "不額外添加任何風格指示", promptText: null },
+    { id: "preset-summary", name: "重點摘要", description: "精簡條列，先結論後細節", promptText: "請以精簡的重點摘要方式回答。先給出 2-3 句結論，再用條列式補充關鍵細節。避免冗長解釋，使用粗體標示重要資訊。" },
+    { id: "preset-detailed", name: "詳細說明", description: "完整分析含程式碼引用", promptText: "請提供詳細且完整的說明。包含相關背景脈絡、具體的檔案路徑與行號引用、逐步推理過程。可使用程式碼片段輔助說明，不要省略重要細節。" },
+    { id: "preset-non-tech", name: "非技術摘要", description: "避免術語，著重商業影響", promptText: "請以非技術人員也能理解的方式回答。避免使用程式碼或技術術語，如需提及請附簡短解釋。使用類比和日常用語來說明技術概念，著重在商業影響和功能面而非實作細節。" },
+    { id: "preset-structured", name: "表格與圖表", description: "優先使用表格、Mermaid 圖表", promptText: "盡可能使用結構化格式回答：Markdown 表格做比較分析、Mermaid 圖表呈現架構和流程、編號清單標示步驟。優先使用視覺化格式而非純文字敘述。" },
+  ];
+  for (const p of presets) {
+    db.run(sql`INSERT OR IGNORE INTO output_styles (id, user_id, name, description, prompt_text, created_at, updated_at) VALUES (${p.id}, NULL, ${p.name}, ${p.description}, ${p.promptText}, ${now}, ${now})`);
+  }
+
   return db;
 }
 

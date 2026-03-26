@@ -71,7 +71,8 @@ export function buildRepoDescriptions(repos: RepoMetaForPrompt[]): string {
 export function getRepoAgentSystemPrompt(
   repoName: string,
   repoPath: string,
-  customRolePrompt?: string | null
+  customRolePrompt?: string | null,
+  outputStylePrompt?: string | null
 ): string {
   const role =
     customRolePrompt?.trim() ||
@@ -95,7 +96,13 @@ Your working directory is: ${repoPath}
 - When explaining architecture, describe the directory structure and key files.
 - Always respond in 繁體中文 (Traditional Chinese, Taiwan usage) unless the user explicitly asks otherwise.`;
 
-  return `${role}\n\n${coreConstraints}`;
+  let prompt = `${role}\n\n${coreConstraints}`;
+
+  if (outputStylePrompt?.trim()) {
+    prompt += `\n\n## Output Style\n\n${outputStylePrompt.trim()}`;
+  }
+
+  return prompt;
 }
 
 /**
@@ -139,7 +146,7 @@ Examine the codebase and extract the following information. Output a JSON object
  */
 export function getOrchestratorDirectPrompt(
   customRolePrompt?: string | null,
-  options?: { structuredOutput?: boolean }
+  options?: { structuredOutput?: boolean; outputStylePrompt?: string | null }
 ): string {
   const role = customRolePrompt?.trim() || `You are a senior software architect who oversees multiple code repositories.
 
@@ -176,7 +183,7 @@ Describe the blast radius: which services, APIs, and user flows are affected.
 Key risks, mitigation strategies, and implementation recommendations.`
     : "";
 
-  return `${role}
+  let fullPrompt = `${role}
 
 ## Core Constraints
 
@@ -200,4 +207,10 @@ Your working directory contains multiple code repositories. A \`CLAUDE.md\` file
 - Always respond in 繁體中文 (Traditional Chinese, Taiwan usage) unless the user explicitly asks otherwise.
 - Provide concrete evidence from the code, not speculation.
 - When discussing cross-repo dependencies, cite the specific files and line numbers in each repo.${structuredSection}`;
+
+  if (options?.outputStylePrompt?.trim()) {
+    fullPrompt += `\n\n## Output Style\n\n${options.outputStylePrompt.trim()}`;
+  }
+
+  return fullPrompt;
 }

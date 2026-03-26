@@ -89,6 +89,7 @@ export const conversations = sqliteTable("conversations", {
     .notNull()
     .default(false),
   model: text("model").default("sonnet"),
+  outputStyleId: text("output_style_id"),
   type: text("type", {
     enum: ["chat", "analysis"],
   }).default("chat"),
@@ -132,6 +133,21 @@ export const usageRecords = sqliteTable("usage_records", {
   outputTokens: integer("output_tokens").notNull().default(0),
   totalCostUsd: real("total_cost_usd").notNull().default(0),
   createdAt: text("created_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
+
+// Output styles table
+export const outputStyles = sqliteTable("output_styles", {
+  id: text("id").primaryKey(),
+  userId: text("user_id"), // null = system preset
+  name: text("name").notNull(),
+  description: text("description"),
+  promptText: text("prompt_text"), // null for "default" preset
+  createdAt: text("created_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+  updatedAt: text("updated_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
 });

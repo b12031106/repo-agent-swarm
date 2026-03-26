@@ -174,6 +174,7 @@ function AnalysisContent() {
             conversationId={activeConvId}
             onConversationId={handleConversationId}
             onMounted={handleChatMounted}
+            initialOutputStyleId={conversations.find((c) => c.id === activeConvId)?.outputStyleId}
           />
         )}
       </div>

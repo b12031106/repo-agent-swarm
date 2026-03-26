@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useChat } from "@/hooks/useChat";
 import { ChatInput } from "./chat-input";
 import { ModelSelector } from "./model-selector";
+import { OutputStyleSelector } from "./output-style-selector";
 import { MessageBubble } from "./message-bubble";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertCircle, Loader2, RotateCcw } from "lucide-react";
@@ -15,6 +16,7 @@ interface ChatContainerProps {
   conversationId?: string;
   onConversationId?: (id: string) => void;
   initialModel?: string;
+  initialOutputStyleId?: string | null;
   onMounted?: () => void;
 }
 
@@ -24,6 +26,7 @@ export function ChatContainer({
   conversationId,
   onConversationId,
   initialModel,
+  initialOutputStyleId,
   onMounted,
 }: ChatContainerProps) {
   const {
@@ -36,7 +39,10 @@ export function ChatContainer({
     retry,
     model,
     setModel,
-  } = useChat({ endpoint, conversationId, onConversationId, model: initialModel });
+    outputStyleId,
+    setOutputStyle,
+    conversationId: sessionConversationId,
+  } = useChat({ endpoint, conversationId, onConversationId, model: initialModel, outputStyleId: initialOutputStyleId });
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -113,6 +119,14 @@ export function ChatContainer({
             value={model}
             onChange={setModel}
             disabled={isLoading}
+          />
+        }
+        outputStyleSelector={
+          <OutputStyleSelector
+            value={outputStyleId}
+            onChange={setOutputStyle}
+            disabled={isLoading}
+            locked={!!sessionConversationId}
           />
         }
       />

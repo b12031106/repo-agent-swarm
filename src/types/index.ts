@@ -39,9 +39,20 @@ export interface Conversation {
   model: string | null;
   type: ConversationType | null;
   userId: string | null;
+  outputStyleId: string | null;
   createdAt: string;
   updatedAt: string;
   repoName?: string | null;
+}
+
+export interface OutputStyle {
+  id: string;
+  userId: string | null;
+  name: string;
+  description: string | null;
+  promptText: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type MessageRole = "user" | "assistant" | "tool";
@@ -135,6 +146,7 @@ export interface ChatRequest {
   message: string;
   conversationId?: string;
   model?: string;
+  outputStyleId?: string;
   attachmentIds?: string[];
 }
 

@@ -67,6 +67,7 @@ export interface ChatSession {
   lastUserMessage: string | null;
   lastUserAttachments: UploadedAttachment[] | null;
   model: string;
+  outputStyleId: string | null;
 }
 
 const MAX_CONCURRENT_STREAMS = 3;
@@ -74,7 +75,8 @@ const MAX_CONCURRENT_STREAMS = 3;
 function createEmptySession(
   endpoint: string,
   conversationId?: string,
-  model?: string
+  model?: string,
+  outputStyleId?: string | null
 ): ChatSession {
   return {
     messages: [],
@@ -89,6 +91,7 @@ function createEmptySession(
     lastUserMessage: null,
     lastUserAttachments: null,
     model: model || "sonnet",
+    outputStyleId: outputStyleId || null,
   };
 }
 
@@ -105,11 +108,13 @@ interface ChatStore {
     chatId: string,
     endpoint: string,
     conversationId?: string,
-    model?: string
+    model?: string,
+    outputStyleId?: string | null
   ) => void;
   switchChat: (chatId: string) => void;
   removeSession: (chatId: string) => void;
   setSessionModel: (chatId: string, model: string) => void;
+  setSessionOutputStyle: (chatId: string, styleId: string) => void;
 
   // Message actions (operate on store, not dependent on React lifecycle)
   sendMessage: (chatId: string, content: string, attachments?: UploadedAttachment[]) => void;
@@ -148,7 +153,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     });
   },
 
-  initSession: (chatId, endpoint, conversationId, model) => {
+  initSession: (chatId, endpoint, conversationId, model, outputStyleId) => {
     set((state) => {
       if (state.sessions.has(chatId)) {
         // Session already exists, just switch to it
@@ -157,7 +162,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       const newSessions = new Map(state.sessions);
       newSessions.set(
         chatId,
-        createEmptySession(endpoint, conversationId, model)
+        createEmptySession(endpoint, conversationId, model, outputStyleId)
       );
       return { sessions: newSessions, activeChatId: chatId };
     });
@@ -183,6 +188,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   setSessionModel: (chatId, model) => {
     get()._updateSession(chatId, () => ({ model }));
+  },
+
+  setSessionOutputStyle: (chatId, styleId) => {
+    get()._updateSession(chatId, () => ({ outputStyleId: styleId }));
   },
 
   loadHistory: async (chatId, conversationId) => {
@@ -317,6 +326,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           message: content,
           conversationId: currentSession.conversationId,
           model: currentSession.model,
+          outputStyleId: currentSession.outputStyleId,
           attachmentIds: attachments?.map((a) => a.id),
         }),
         signal: controller.signal,

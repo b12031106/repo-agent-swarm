@@ -37,6 +37,7 @@ interface ChatInputProps {
   isLoading?: boolean;
   placeholder?: string;
   modelSelector?: React.ReactNode;
+  outputStyleSelector?: React.ReactNode;
 }
 
 export function ChatInput({
@@ -45,6 +46,7 @@ export function ChatInput({
   isLoading,
   placeholder = "輸入你的問題...",
   modelSelector,
+  outputStyleSelector,
 }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [enterMode, setEnterMode] = useState<EnterMode>("enter-send");
@@ -412,6 +414,7 @@ export function ChatInput({
       <div className="flex items-center justify-between px-4 pb-2 -mt-1">
         <div className="flex items-center gap-2">
           {modelSelector}
+          {outputStyleSelector}
           <button
             onClick={toggleEnterMode}
             className="flex items-center gap-1 text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"

@@ -191,6 +191,7 @@ function RepoChatContent({ repoId }: { repoId: string }) {
           endpoint={`/api/chat/${repoId}`}
           conversationId={activeConvId}
           onConversationId={handleConversationId}
+          initialOutputStyleId={conversations.find((c) => c.id === activeConvId)?.outputStyleId}
         />
       </div>
     </div>

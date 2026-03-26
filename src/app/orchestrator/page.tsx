@@ -146,6 +146,7 @@ function OrchestratorContent() {
           endpoint="/api/chat/orchestrator"
           conversationId={activeConvId}
           onConversationId={handleConversationId}
+          initialOutputStyleId={conversations.find((c) => c.id === activeConvId)?.outputStyleId}
         />
       </div>
 

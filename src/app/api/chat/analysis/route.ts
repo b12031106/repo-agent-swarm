@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
   const user = await getRequiredUser();
   if (isAuthError(user)) return user;
   const body = await request.json();
-  const { message, conversationId, model, attachmentIds } = body;
+  const { message, conversationId, model, outputStyleId, attachmentIds } = body;
 
   if (!message) {
     return new Response(JSON.stringify({ error: "message is required" }), {
@@ -62,6 +62,8 @@ export async function POST(request: NextRequest) {
   let convId = conversationId;
   let sessionId: string | undefined;
 
+  let convOutputStyleId: string | undefined;
+
   if (convId) {
     const conv = db
       .select()
@@ -70,10 +72,25 @@ export async function POST(request: NextRequest) {
       .get();
     if (conv) {
       sessionId = conv.sessionId || undefined;
+      convOutputStyleId = conv.outputStyleId || undefined;
     }
   }
 
   const effectiveModel = model || "opus";
+
+  // Resolve output style
+  const effectiveStyleId = outputStyleId || convOutputStyleId;
+  let outputStylePrompt: string | null = null;
+  if (effectiveStyleId) {
+    const style = db
+      .select()
+      .from(schema.outputStyles)
+      .where(eq(schema.outputStyles.id, effectiveStyleId))
+      .get();
+    if (style?.promptText) {
+      outputStylePrompt = style.promptText;
+    }
+  }
 
   if (!convId) {
     convId = uuidv4();
@@ -85,6 +102,7 @@ export async function POST(request: NextRequest) {
         isOrchestrator: true,
         model: model || "opus",
         type: "analysis",
+        outputStyleId: effectiveStyleId || null,
         userId: user.id,
       })
       .run();
@@ -144,7 +162,7 @@ export async function POST(request: NextRequest) {
     let resultSessionId: string | undefined;
     const totalUsage = { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
 
-    for await (const event of orchestrator.query(enhancedMessage, sessionId, effectiveModel)) {
+    for await (const event of orchestrator.query(enhancedMessage, sessionId, effectiveModel, outputStylePrompt)) {
       // Accumulate all text
       if (event.type === "text" && event.content) {
         fullAssistantText += event.content;

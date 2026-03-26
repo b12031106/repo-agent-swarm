@@ -43,20 +43,23 @@ export class RepoAgent {
     message: string,
     conversationSessionId?: string,
     model?: string,
+    outputStylePrompt?: string | null,
   ): AsyncGenerator<AgentStreamEvent> {
     const sid = conversationSessionId || this.sessionId;
-    yield* this.runQuery(message, sid, model);
+    yield* this.runQuery(message, sid, model, outputStylePrompt);
   }
 
   private async *runQuery(
     message: string,
     sessionId?: string | null,
     model?: string,
+    outputStylePrompt?: string | null,
   ): AsyncGenerator<AgentStreamEvent> {
     const systemPrompt = getRepoAgentSystemPrompt(
       this.config.repoName,
       this.config.repoPath,
-      this.config.customPrompt
+      this.config.customPrompt,
+      outputStylePrompt
     );
 
     let hasContent = false;
@@ -98,7 +101,7 @@ export class RepoAgent {
         console.warn(
           `[RepoAgent:${this.config.repoName}] Session resume failed, retrying without session`
         );
-        yield* this.runQuery(message, null, model);
+        yield* this.runQuery(message, null, model, outputStylePrompt);
         return;
       }
 

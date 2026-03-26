@@ -23,6 +23,8 @@ interface UseChatOptions {
   onConversationId?: (id: string) => void;
   /** Model to use for the conversation */
   model?: string;
+  /** Output style ID for the conversation */
+  outputStyleId?: string | null;
 }
 
 export function useChat(options: UseChatOptions) {
@@ -45,9 +47,20 @@ export function useChat(options: UseChatOptions) {
 
   const store = useChatStore();
 
+  // Resolve default output style from localStorage for new conversations
+  const resolvedOutputStyleId = useMemo(() => {
+    if (options.outputStyleId) return options.outputStyleId;
+    if (options.conversationId) return null; // Will be loaded from DB
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("default-output-style-id") || "preset-default";
+    }
+    return "preset-default";
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Initialize session on mount
   useEffect(() => {
-    store.initSession(chatId, options.endpoint, options.conversationId, options.model);
+    store.initSession(chatId, options.endpoint, options.conversationId, options.model, resolvedOutputStyleId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
 
@@ -102,6 +115,12 @@ export function useChat(options: UseChatOptions) {
     [chatId]
   );
 
+  const setOutputStyle = useCallback(
+    (styleId: string) => store.setSessionOutputStyle(chatId, styleId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chatId]
+  );
+
   return {
     messages: session?.messages || [],
     isLoading: session?.isLoading || false,
@@ -115,6 +134,8 @@ export function useChat(options: UseChatOptions) {
     conversationId: session?.conversationId,
     model: session?.model || "sonnet",
     setModel,
+    outputStyleId: session?.outputStyleId || null,
+    setOutputStyle,
     chatId,
   };
 }

@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
       model: schema.conversations.model,
       type: schema.conversations.type,
       userId: schema.conversations.userId,
+      outputStyleId: schema.conversations.outputStyleId,
       createdAt: schema.conversations.createdAt,
       updatedAt: schema.conversations.updatedAt,
       repoName: schema.repos.name,
