@@ -18,6 +18,7 @@ import type { AgentStreamEvent } from "@/types";
 export async function POST(request: NextRequest) {
   const user = await getRequiredUser();
   if (isAuthError(user)) return user;
+  const userId = user.id;
   const body = await request.json();
   const { message, conversationId, model, outputStyleId, attachmentIds } = body;
 
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
         model: model || "opus",
         type: "analysis",
         outputStyleId: effectiveStyleId || null,
-        userId: user.id,
+        userId,
       })
       .run();
   }
@@ -188,7 +189,7 @@ export async function POST(request: NextRequest) {
         .values({
           id: uuidv4(),
           conversationId: finalConvId,
-          userId: user.id,
+          userId,
           inputTokens: totalUsage.input_tokens,
           outputTokens: totalUsage.output_tokens,
           totalCostUsd: totalUsage.cost_usd,

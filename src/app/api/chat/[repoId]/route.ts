@@ -17,6 +17,7 @@ export async function POST(
 ) {
   const user = await getRequiredUser();
   if (isAuthError(user)) return user;
+  const userId = user.id;
   const { repoId } = await params;
   const body = await request.json();
   const { message, conversationId, model, outputStyleId, attachmentIds } = body;
@@ -103,7 +104,7 @@ export async function POST(
         isOrchestrator: false,
         model: effectiveModel,
         outputStyleId: effectiveStyleId || null,
-        userId: user.id,
+        userId,
       })
       .run();
   } else if (model && model !== convModel) {
@@ -175,7 +176,7 @@ export async function POST(
           .values({
             id: uuidv4(),
             conversationId: finalConvId,
-            userId: user.id,
+            userId,
             inputTokens: event.usage.input_tokens,
             outputTokens: event.usage.output_tokens,
             totalCostUsd: event.usage.cost_usd,

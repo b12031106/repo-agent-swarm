@@ -6,7 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "prod:setup": "bash scripts/setup-production.sh",
+    "prod:start": "pm2 start ecosystem.config.cjs",
+    "prod:stop": "pm2 stop all",
+    "prod:restart": "pm2 reload app --update-env",
+    "prod:logs": "pm2 logs",
+    "prod:status": "pm2 status"
   },
   "dependencies": {
     "@anthropic-ai/claude-code": "^2.1.83",
